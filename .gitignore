@@ -12,3 +12,8 @@ Cargo.lock
 # Vim backup files
 **/*.swp
 **/*.swo
+
+# JS library
+clnt/src/three.min.js
+# Assets
+clnt/assets/*

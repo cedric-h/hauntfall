@@ -54,7 +54,7 @@ fn main() {
 
     for obj in map_json.into_iter() {
         let mut builder = world.create_entity()
-            .with(Pos::vec(Vec2::new(obj.location[1], obj.location[0]) * 2.0))
+            .with(Pos::vec(Vec2::new(obj.location[0], obj.location[1]) * 4.0))
             .with(obj.appearance);
         if obj.tile {
             builder = builder.with(comn::art::Tile);

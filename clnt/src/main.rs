@@ -14,9 +14,11 @@ use prelude::*;
 
 mod renderer {
     use crate::prelude::*;
-    use comn::art::{Animate, AnimationData, Appearance, SpritesheetData, Tile};
-    use comn::enum_iterator::IntoEnumIterator;
-    use std::collections::HashMap;
+    use comn::art::{Appearance, Tile};
+    //use comn::enum_iterator::IntoEnumIterator;
+    use serde::{Serialize, Deserialize};
+    //use std::collections::HashMap;
+    /*
     use stdweb::{
         traits::*,
         unstable::TryInto,
@@ -24,134 +26,58 @@ mod renderer {
             html_element::{CanvasElement, ImageElement},
             CanvasRenderingContext2d as CanvasContext, RenderingContext,
         },
-    };
+    };*/
+
+    #[derive(Serialize, Deserialize)]
+    struct RenderEntry {
+        ent: u32,
+        appearance: Appearance,
+        iso: Iso2,
+    }
+    stdweb::js_serializable!(RenderEntry);
 
     pub const ZOOM: f32 = 20.0;
     pub const CANVAS_ZOOM: f32 = 2.0; //change this in renderer.js
     pub const TOTAL_ZOOM: f32 = ZOOM * CANVAS_ZOOM;
 
-    pub struct Render {
-        ctx: CanvasContext,
-        imgs: HashMap<Appearance, ImageElement>,
-    }
+    pub struct Render;
+        //appearances: HashMap<Appearance, ImageElement>,
+    //}
 
     impl Default for Render {
         fn default() -> Self {
-            // find the thing we'll draw on
-            let canvas: CanvasElement = stdweb::web::document()
-                .get_element_by_id("canv")
-                .expect("Couldn't find canvas to render on.")
-                .try_into()
-                .expect("Entity with the 'canv' id isn't a canvas!");
-
-            let ctx = CanvasContext::from_canvas(&canvas)
-                .expect("Couldn't get canvas rendering context from canvas");
-
-            ctx.scale(CANVAS_ZOOM as f64, CANVAS_ZOOM as f64);
 
             // load up the images
-            let imgs = Appearance::into_enum_iter()
-                .map(|appearance| {
-                    let loc = format!("./img/{:?}.png", appearance);
+            //let appearances = HashMap::new();
 
-                    // set image up to load
-                    let new_img = ImageElement::new();
-                    new_img.set_src(&loc);
-
-                    // log on image load
-                    js!(@{new_img.clone()}.onload = () => console.log("loaded: ", @{loc}));
-
-                    (appearance, new_img)
-                })
-                .collect();
-
-            Self { ctx, imgs }
+            //Self { appearances }
+            Render
         }
     }
 
     impl<'a> System<'a> for Render {
         type SystemData = (
+            Entities<'a>,
             ReadStorage<'a, Appearance>,
             ReadStorage<'a, Pos>,
             ReadStorage<'a, Tile>,
-            WriteStorage<'a, Animate>,
         );
 
-        fn run(&mut self, (appearances, poses, tiles, mut animates): Self::SystemData) {
-            self.ctx.set_fill_style_color("black");
-
-            // black background
-            let win = stdweb::web::window();
-            self.ctx.fill_rect(
-                0.0,
-                0.0,
-                win.inner_width().into(),
-                win.inner_height().into(),
-            );
+        fn run(&mut self, (ents, appearances, poses, tiles): Self::SystemData) {
 
             // tiles are rendered as if their origin was their center on the X and Y.
             // also, tiles are rendered first so that everything else can step on them.
-            for (appearance, &Pos(iso), _) in (&appearances, &poses, &tiles).join() {
-                const SIZE: f32 = 2.0;
-                self.ctx
-                    .draw_image_d(
-                        self.imgs[appearance].clone(),
-                        ((iso.translation.vector.x - SIZE / 2.0) * ZOOM) as f64,
-                        ((iso.translation.vector.y - SIZE / 2.0) * ZOOM) as f64,
-                        (SIZE * ZOOM) as f64,
-                        (SIZE * ZOOM) as f64,
-                    )
-                    .expect("Couldn't draw tile!");
-            }
+            let render_entries = (&*ents, &appearances, &poses, &tiles).join()
+                .map(|(ent, a, Pos(i), _)| {
+                    RenderEntry {
+                        ent: ent.id(),
+                        appearance: a.clone(),
+                        iso: i.clone(),
+                    }
+                })
+                .collect::<Vec<_>>();
 
-            // other entities are rendered as if their origin was
-            // their center on the X,
-            // but their bottom on the Y.
-            for (appearance, &Pos(iso), animaybe, _) in
-                (&appearances, &poses, (&mut animates).maybe(), !&tiles).join()
-            {
-                const SIZE: f32 = 2.0;
-                if let Some(anim) = animaybe {
-                    let SpritesheetData {
-                        rows,
-                        frame_width,
-                        frame_height,
-                    } = comn::art::SPRITESHEETS
-                        .get(appearance)
-                        .unwrap_or_else(|| panic!("No animation data found for {:?}!", appearance));
-
-                    let AnimationData { frame_duration, .. } = rows
-                        .get(anim.row)
-                        .unwrap_or_else(|| panic!("{:?} has no row #{}!", appearance, anim.row));
-
-                    let current_frame =
-                        (anim.current_frame - anim.current_frame % frame_duration) / frame_duration;
-
-                    self.ctx
-                        .draw_image_s(
-                            self.imgs[appearance].clone(),
-                            (frame_width * current_frame) as f64,
-                            (frame_height * anim.row) as f64,
-                            *frame_width as f64,
-                            *frame_height as f64,
-                            ((iso.translation.vector.x - SIZE / 2.0) * ZOOM) as f64,
-                            ((iso.translation.vector.y - SIZE) * ZOOM) as f64,
-                            (SIZE * ZOOM) as f64,
-                            (SIZE * ZOOM) as f64,
-                        )
-                        .expect("Couldn't draw animated non-tile entity!");
-                } else {
-                    self.ctx
-                        .draw_image_d(
-                            self.imgs[appearance].clone(),
-                            ((iso.translation.vector.x - SIZE / 2.0) * ZOOM) as f64,
-                            ((iso.translation.vector.y - SIZE) * ZOOM) as f64,
-                            (SIZE * ZOOM) as f64,
-                            (SIZE * ZOOM) as f64,
-                        )
-                        .expect("Couldn't draw non-tile entity!");
-                }
-            }
+            js!(render(@{render_entries}));
         }
     }
 }
