@@ -8,6 +8,18 @@ use specs::WorldExt;
 mod net;
 mod pickup;
 
+
+mod map {
+    use serde::{Serialize, Deserialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub struct MapEntry {
+        pub location: [f32; 3],
+        pub tile: bool,
+        pub appearance: comn::art::Appearance,
+    }
+}
+
 fn main() {
     {
         use log::LevelFilter::*;
@@ -35,55 +47,19 @@ fn main() {
 
     dispatcher.setup(&mut world);
 
-    use comn::art::{Animate, Appearance, Tile};
-    use comn::{Cuboid, Hitbox};
-    use rand::{thread_rng, Rng};
-    let mut rng = thread_rng();
-    for x in 0..10 {
-        for y in 0..10 {
-            let is_hole = x * y % 3 != 0;
-            let loc = Vec2::new(x as f32 * 2.0 + 2.0, y as f32 * 2.0 + 2.0);
+    let file = std::fs::File::open("./map.json")
+        .expect("couldn't open map.json");
+    let map_json: Vec<map::MapEntry> = serde_json::from_reader(file)
+        .expect("map file isn't proper JSON");
 
-            world
-                .create_entity()
-                .with(Tile)
-                .with({
-                    use Appearance::*;
-
-                    if is_hole {
-                        RockHole
-                    } else if rand::random() {
-                        Rock
-                    } else {
-                        SpottedRock
-                    }
-                })
-                .with(Pos::vec(loc.clone()))
-                .build();
-
-            match (is_hole, rng.gen_range(0, 10)) {
-                (true, 4) => {
-                    world
-                        .create_entity()
-                        .with(Appearance::GleamyStalagmite)
-                        .with(Pos::vec(loc + Vec2::y() * 0.75))
-                        .with(Hitbox(Cuboid::new(Vec2::new(0.8, 0.5))))
-                        .with(Animate::new())
-                        .build();
-                }
-                (false, 3) => {
-                    if rand::random() {
-                        world
-                            .create_entity()
-                            .with(Item::Misc)
-                            .with(Appearance::Key)
-                            .with(Pos::vec(loc + Vec2::y() * 0.75))
-                            .build();
-                    }
-                }
-                _ => {}
-            }
+    for obj in map_json.into_iter() {
+        let mut builder = world.create_entity()
+            .with(Pos::vec(Vec2::new(obj.location[1], obj.location[0]) * 2.0))
+            .with(obj.appearance);
+        if obj.tile {
+            builder = builder.with(comn::art::Tile);
         }
+        builder.build();
     }
 
     info!("starting game loop!");
