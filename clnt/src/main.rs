@@ -14,19 +14,9 @@ use prelude::*;
 
 mod renderer {
     use crate::prelude::*;
-    use comn::art::{Appearance, Tile};
-    //use comn::enum_iterator::IntoEnumIterator;
+    use comn::art::Appearance;
+    use comn::enum_iterator::IntoEnumIterator;
     use serde::{Serialize, Deserialize};
-    //use std::collections::HashMap;
-    /*
-    use stdweb::{
-        traits::*,
-        unstable::TryInto,
-        web::{
-            html_element::{CanvasElement, ImageElement},
-            CanvasRenderingContext2d as CanvasContext, RenderingContext,
-        },
-    };*/
 
     #[derive(Serialize, Deserialize)]
     struct RenderEntry {
@@ -41,16 +31,10 @@ mod renderer {
     pub const TOTAL_ZOOM: f32 = ZOOM * CANVAS_ZOOM;
 
     pub struct Render;
-        //appearances: HashMap<Appearance, ImageElement>,
-    //}
 
     impl Default for Render {
         fn default() -> Self {
 
-            // load up the images
-            //let appearances = HashMap::new();
-
-            //Self { appearances }
             Render
         }
     }
@@ -60,15 +44,14 @@ mod renderer {
             Entities<'a>,
             ReadStorage<'a, Appearance>,
             ReadStorage<'a, Pos>,
-            ReadStorage<'a, Tile>,
         );
 
-        fn run(&mut self, (ents, appearances, poses, tiles): Self::SystemData) {
+        fn run(&mut self, (ents, appearances, poses): Self::SystemData) {
 
             // tiles are rendered as if their origin was their center on the X and Y.
             // also, tiles are rendered first so that everything else can step on them.
-            let render_entries = (&*ents, &appearances, &poses, &tiles).join()
-                .map(|(ent, a, Pos(i), _)| {
+            let render_entries = (&*ents, &appearances, &poses).join()
+                .map(|(ent, a, Pos(i))| {
                     RenderEntry {
                         ent: ent.id(),
                         appearance: a.clone(),
@@ -365,10 +348,10 @@ mod controls {
                 // these variables are needed to determine direction from key names.
                 if keys.len() > 0 {
                     let move_vec = keys.iter().fold(na::zero(), |vec: Vec2, key| match key {
-                        ('w', true) => vec - Vec2::y(),
-                        ('s', true) => vec + Vec2::y(),
-                        ('a', true) => vec - Vec2::x(),
-                        ('d', true) => vec + Vec2::x(),
+                        ('w', true) => vec + Vec2::new(-1.0,  1.0),
+                        ('s', true) => vec + Vec2::new( 1.0, -1.0),
+                        ('a', true) => vec + Vec2::new(-1.0, -1.0),
+                        ('d', true) => vec + Vec2::new( 1.0,  1.0),
                         _ => vec,
                     });
 

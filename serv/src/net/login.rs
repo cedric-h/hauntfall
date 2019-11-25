@@ -17,7 +17,6 @@ impl<'a> System<'a> for SendWorldToNewPlayers {
         Entities<'a>,
         ReadStorage<'a, comn::Hitbox>,
         ReadStorage<'a, comn::art::Appearance>,
-        ReadStorage<'a, comn::art::Tile>,
         ReadStorage<'a, comn::art::Animate>,
         ReadStorage<'a, Item>,
         ReadStorage<'a, Pos>,
@@ -25,18 +24,17 @@ impl<'a> System<'a> for SendWorldToNewPlayers {
 
     fn run(
         &mut self,
-        (cm, mut logging_ins, clients, ents, hitboxes, appearances, tiles, animates, items, isos): Self::SystemData,
+        (cm, mut logging_ins, clients, ents, hitboxes, appearances, animates, items, isos): Self::SystemData,
     ) {
         for (_, Client(addr)) in (logging_ins.drain(), &clients).join() {
             debug!("We're about to tell a new player about the world.");
             // tell them about each new entity they need to add, and about
             // some crucial components it has.
-            for (iso, ent, hitbox, appearance, tile, animate, item) in (
+            for (iso, ent, hitbox, appearance, animate, item) in (
                 &isos,
                 &*ents,
                 hitboxes.maybe(),
                 appearances.maybe(),
-                tiles.maybe(),
                 animates.maybe(),
                 items.maybe(),
             )
@@ -59,9 +57,6 @@ impl<'a> System<'a> for SendWorldToNewPlayers {
                 }
                 if let Some(animate) = animate {
                     cm.insert_comp(*addr, ent, animate.clone());
-                }
-                if tile.is_some() {
-                    cm.insert_comp(*addr, ent, comn::art::Tile);
                 }
             }
         }
@@ -87,15 +82,15 @@ impl<'a> System<'a> for SpawnNewPlayers {
         {
             trace!("spawning new player!");
             // these are the components the entity will have.
-            let appearance = Appearance::Player;
+            let appearance = Appearance::Skeleton;
             let iso = Pos(Iso2::translation(1.0, 1.0));
-            let animate = Animate::new();
+            //let animate = Animate::new();
             let hitbox = Hitbox(Cuboid::new(Vec2::new(0.5, 0.25)));
 
             // give them player components
             lu.insert(ent, iso.clone());
             lu.insert(ent, appearance.clone());
-            lu.insert(ent, animate.clone());
+            //lu.insert(ent, animate.clone());
             lu.insert(ent, hitbox.clone());
             lu.insert(ent, art::PlayerAnimationController);
             lu.insert(ent, item::Inventory::character());
@@ -105,7 +100,7 @@ impl<'a> System<'a> for SpawnNewPlayers {
                 cm.new_ent(*addr, ent);
                 cm.insert_comp(*addr, ent, iso.clone());
                 cm.insert_comp(*addr, ent, appearance.clone());
-                cm.insert_comp(*addr, ent, animate.clone());
+                //cm.insert_comp(*addr, ent, animate.clone());
                 cm.insert_comp(*addr, ent, hitbox.clone());
                 cm.insert_comp(*addr, ent, art::PlayerAnimationController);
                 if addr == new_player_addr {

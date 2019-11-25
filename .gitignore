@@ -13,7 +13,8 @@ Cargo.lock
 **/*.swp
 **/*.swo
 
-# JS library
-clnt/src/three.min.js
+# JS libraries
+clnt/js_lib/*
 # Assets
+clnt/static/assets/*
 clnt/assets/*

@@ -135,7 +135,7 @@ pub mod net {
 
         // Component includes
         use super::{LocalPlayer, SpawnPlayer, UpdatePosition};
-        use crate::art::{Animate, Appearance, PlayerAnimationController, Tile};
+        use crate::art::{Animate, Appearance, PlayerAnimationController};
         use crate::controls::{Camera, Heading};
         use crate::dead::Dead;
         use crate::item::{Deposition, DropRequest, Inventory, PickupRequest};
@@ -144,7 +144,6 @@ pub mod net {
         net_component! {
             // art
             Appearance,
-            Tile,
             Animate,
             PlayerAnimationController,
 

@@ -8,12 +8,6 @@ pub use player_anim::PlayerAnimationController;
 #[derive(Clone, Debug, Default, Component, Serialize, Deserialize)]
 /// Entities with this component are rendered at a special stage on the client,
 /// and their origin is in the (center, center) rather than their (center, bottom)
-#[storage(NullStorage)]
-pub struct Tile;
-
-#[derive(Clone, Debug, Default, Component, Serialize, Deserialize)]
-/// Entities with this component are rendered at a special stage on the client,
-/// and their origin is in the (center, center) rather than their (center, bottom)
 pub struct Animate {
     pub current_frame: usize,
     pub row: usize,
@@ -85,17 +79,19 @@ pub struct SpritesheetData {
 /// Therefore, this component isn't really used on the server all that much
 /// except for when it needs to be sent down to the clients.
 pub enum Appearance {
-    Rock,
-    Key,
-    SpottedRock,
-    RockHole,
-    GleamyStalagmite,
-    Player,
+    StoneOutcroppingFloorRight,
+    StoneOutcroppingFloorLeft,
+    StoneOutcroppingFloorCorner,
+    StoneOutcroppingFloorBottom,
+    Skeleton,
+    Lantern,
+    StoneWall,
 }
 
 lazy_static::lazy_static! {
     pub static ref SPRITESHEETS: std::collections::HashMap<Appearance, SpritesheetData> = {
-        use Appearance::*;
+        //use Appearance::*;
+        /*
         [
             (
                 GleamyStalagmite,
@@ -147,6 +143,7 @@ lazy_static::lazy_static! {
         ]
         .iter()
         .cloned()
-        .collect()
+        .collect()*/
+        std::collections::HashMap::new()
     };
 }

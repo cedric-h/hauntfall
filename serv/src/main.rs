@@ -15,7 +15,7 @@ mod map {
     #[derive(Serialize, Deserialize)]
     pub struct MapEntry {
         pub location: [f32; 3],
-        pub tile: bool,
+        pub hitbox_dimensions: Option<[f32; 2]>,
         pub appearance: comn::art::Appearance,
     }
 }
@@ -52,12 +52,13 @@ fn main() {
     let map_json: Vec<map::MapEntry> = serde_json::from_reader(file)
         .expect("map file isn't proper JSON");
 
-    for obj in map_json.into_iter() {
+    for map::MapEntry { location: loc, appearance, hitbox_dimensions: hb } in map_json.into_iter() {
         let mut builder = world.create_entity()
-            .with(Pos::vec(Vec2::new(obj.location[0], obj.location[1]) * 4.0))
-            .with(obj.appearance);
-        if obj.tile {
-            builder = builder.with(comn::art::Tile);
+            .with(Pos::vec(Vec2::new(loc[0], loc[1])))
+            .with(appearance);
+        if let Some(hb) = hb {
+            builder = builder
+                .with(comn::Hitbox(comn::Cuboid::new(Vec2::new(hb[0], hb[1])/2.0)));
         }
         builder.build();
     }
