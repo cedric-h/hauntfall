@@ -79,6 +79,7 @@ impl<'a> System<'a> for SpawnNewPlayers {
         &mut self,
         (ents, cm, appear_record, lu, mut players_to_spawn, clients): Self::SystemData,
     ) {
+        use crate::combat;
         use comn::{art, item, Cuboid, Hitbox};
         for (_, ent, Client(new_player_addr)) in (players_to_spawn.drain(), &*ents, &clients).join()
         {
@@ -95,6 +96,7 @@ impl<'a> System<'a> for SpawnNewPlayers {
             //lu.insert(ent, animate.clone());
             lu.insert(ent, hitbox.clone());
             lu.insert(ent, art::PlayerAnimationController);
+            lu.insert(ent, combat::Alignment::Players);
             lu.insert(ent, item::Inventory::character());
 
             // tell everyone 'bout the new kid on the block

@@ -128,9 +128,13 @@ impl<'a> System<'a> for SyncPositions {
                 ..
             },
             heading,
-        ) in (&mut currents, &updates, &headings).join()
+        ) in (&mut currents, &updates, headings.maybe()).join()
         {
-            if !(heading.dir.magnitude() > 0.0) {
+            if let Some(heading) = heading {
+                if !(heading.dir.magnitude() > 0.0) {
+                    at.vector = at.vector.lerp(&go.vector, 0.03);
+                }
+            } else {
                 at.vector = at.vector.lerp(&go.vector, 0.03);
             }
             /*

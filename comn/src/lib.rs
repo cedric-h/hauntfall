@@ -28,6 +28,16 @@ impl Pos {
     }
 }
 
+#[macro_export]
+macro_rules! vec_of_pos {
+    ($($vec_name:tt)*) => {
+        Pos(Iso2 {
+            translation: Translation2 { vector: $($vec_name)* },
+            ..
+        })
+    }
+}
+
 #[derive(Clone, Debug, Component, Serialize, Deserialize)]
 pub struct Hitbox(pub Cuboid<f32>);
 

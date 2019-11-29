@@ -1,10 +1,15 @@
-use comn::prelude::*;
+use comn::specs::{Builder, World, WorldExt};
 use forge::Engine;
-use log::*;
+// std
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::{fs::File, io::Read};
+// us
+use super::ServerConfig;
+use comn::prelude::*;
+
+type StringForgeMap = HashMap<String, forge::Value>;
 
 fn vec3_from_forge_list(forge_vals: &Vec<forge::Value>) -> Result<na::Vector3<f32>, &forge::Value> {
     let mut vec: na::Vector3<f32> = na::zero();
@@ -19,6 +24,19 @@ fn vec3_from_forge_list(forge_vals: &Vec<forge::Value>) -> Result<na::Vector3<f3
     }
 
     Ok(vec)
+}
+
+fn string_forge_map_from(forge_map: &forge::Value) -> Result<StringForgeMap, ()> {
+    if let forge::Value::Map(map_ref) = forge_map {
+        Ok(map_ref
+            .borrow()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k.get_display_text().unwrap(), v))
+            .collect())
+    } else {
+        Err(())
+    }
 }
 
 fn json_to_forge(json: serde_json::Value) -> forge::Value {
@@ -96,11 +114,7 @@ impl Level {
         Self { engine, level }
     }
 
-    pub fn load_map(&mut self, world: &mut comn::specs::World, config: &super::ServerConfig) {
-        use comn::specs::{Builder, WorldExt};
-        use comn::Hitbox;
-        use forge::Value as v;
-
+    pub fn load_map(&mut self, world: &mut World, config: &ServerConfig) -> Result<(), String> {
         let processed_map = self
             .engine
             .eval("load_map(map_entries)")
@@ -111,67 +125,116 @@ impl Level {
                 )
             });
 
-        if let v::List(l) = processed_map {
+        if let forge::Value::List(l) = processed_map {
             for ent_map in l.borrow().iter() {
-                if let v::Map(m) = ent_map {
-                    let ent_map: HashMap<String, v> = m
-                        .borrow()
-                        .clone()
-                        .into_iter()
-                        .map(|(k, v)| (k.get_display_text().unwrap(), v))
-                        .collect();
+                if let Ok(ent_map) = string_forge_map_from(ent_map) {
+                    // save the ent_map's name in case of an error
+                    let name = ent_map.get("name").unwrap().clone();
 
-                    let mut builder = world.create_entity();
-
-                    // find location in map, add position component to entity.
-                    // log error otherwise.
-                    if let Some(v::List(l)) = ent_map.get("location") {
-                        let loc = vec3_from_forge_list(&l.borrow()).unwrap_or_else(|e| {
-                            panic!(
-                                "Invalid data type in location list for {}, found: \"{}\"",
-                                ent_map.get("name").unwrap(),
-                                e
-                            )
-                        });
-                        builder = builder.with(Pos::vec(loc.xy()))
-                    } else {
-                        error!("no location on entity {}", ent_map.get("name").unwrap())
-                    }
-
-                    // find an appearance name in map, turn it into an appearance
-                    // component using the config, and add that to the entity.
-                    // if no appearance can be found, log an error.
-                    if let Some(v::String(a)) = ent_map.get("appearance") {
-                        let appearance_name = a.borrow();
-                        builder = builder.with(
-                            config
-                                .appearance_record
-                                .try_appearance_of(&appearance_name)
-                                .unwrap_or_else(|e| {
-                                    panic!("Invalid appearance name when parsing map: {}", e)
-                                }),
-                        );
-                    } else {
-                        error!("no appearance on entity {}", ent_map.get("name").unwrap())
-                    }
-
-                    // see if hitbox dimensions can be found in the map; if they can,
-                    // then this entity needs a hitbox.
-                    if let Some(v::List(l)) = ent_map.get("hitbox_dimensions") {
-                        let dim = vec3_from_forge_list(&l.borrow()).unwrap_or_else(|e| {
-                            panic!(
-                                "Invalid data type in hitbox_dimensions list for {}, found: \"{}\"",
-                                ent_map.get("name").unwrap(),
-                                e
-                            )
-                        });
-                        builder = builder.with(Hitbox::vec(dim.xy() / 2.0));
-                    }
-
-                    // finally build that entity
-                    builder.build();
+                    Self::process_map_entry(ent_map, world, config).map_err(|e| {
+                        format!(
+                            concat!(
+                                "Couldn't make entity from map entry \"{}\" returned from ",
+                                "level {}'s script's load_map function entry: {}",
+                            ),
+                            name, self.level, e
+                        )
+                    })?;
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn process_map_entry(
+        map: StringForgeMap,
+        world: &mut World,
+        config: &ServerConfig,
+    ) -> Result<(), String> {
+        use comn::Hitbox;
+        use forge::Value as v;
+
+        let mut builder = world.create_entity();
+
+        // find location in map, add position component to entity.
+        // if no location, you just don't get a location that's fine
+        if let Some(v::List(l)) = map.get("location") {
+            let loc = vec3_from_forge_list(&l.borrow())
+                .map_err(|e| format!("Invalid data type in location list, found: \"{}\"", e))?;
+            builder = builder.with(Pos::vec(loc.xy()))
+        }
+
+        // find an appearance name in map, turn it into an appearance
+        // component using the config, and add that to the entity.
+        // if no appearance, you just don't get an appearance that's fine
+        if let Some(v::String(a)) = map.get("appearance") {
+            let appearance_name = a.borrow();
+            builder = builder.with(
+                config
+                    .appearance_record
+                    .try_appearance_of(&appearance_name)
+                    .map_err(|e| format!("Invalid appearance name when parsing map: {}", e))?,
+            );
+        }
+
+        // see if hitbox dimensions can be found in the map; if they can,
+        // then this entity needs a hitbox.
+        if let Some(v::List(l)) = map.get("hitbox_dimensions") {
+            let dim = vec3_from_forge_list(&l.borrow()).map_err(|e| {
+                format!(
+                    "Invalid data type in hitbox_dimensions list found: \"{}\"",
+                    e
+                )
+            })?;
+            builder = builder.with(Hitbox::vec(dim.xy() / 2.0));
+        }
+
+        // see if chaser data can be found in the map; if it can,
+        // then this entity needs that component.
+        if let Some(Ok(chaser_map)) = map.get("chaser").map(|x| string_forge_map_from(x)) {
+            use crate::combat::Alignment;
+            let target: Alignment = serde_json::from_str(&format!(
+                "\"{}\"",
+                chaser_map
+                    .get("target")
+                    .ok_or_else(|| "chaser present but no target provided".to_string())?,
+            ))
+            .map_err(|_| {
+                concat!(
+                    "invalid alignment provided in chaser, ",
+                    "must be one of 'Players', 'Enemies', 'All', 'Neither'"
+                )
+            })?;
+
+            let distance = match chaser_map
+                .get("distance")
+                .ok_or_else(|| "no distance provided for chaser".to_string())?
+            {
+                v::Number(f) => *f as f32,
+                _ => return Err("chaser distance isn't a number".to_string()),
+            };
+
+            let speed = match chaser_map
+                .get("speed")
+                .ok_or_else(|| "no speed provided for chaser".to_string())?
+            {
+                v::Number(f) => *f as f32,
+                _ => return Err("chaser speed isn't a number".to_string()),
+            };
+
+            builder = builder.with(
+                crate::combat::ChaserBuilder {
+                    target,
+                    distance,
+                    speed,
+                }
+                .build(),
+            );
+        }
+
+        // finally build that entity
+        builder.build();
+        Ok(())
     }
 }

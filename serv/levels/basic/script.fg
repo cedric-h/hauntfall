@@ -1,6 +1,12 @@
 let load_map = |map_entries| {
 	for entry in map_entries {
-		entry["location"][0] = 0;
+		if entry["appearance"] == "Hammer" {
+			entry["chaser"] = [
+				"target": "Players",
+				"distance": 2.5,
+				"speed": -0.1,
+			];
+		}
 	}
 	return map_entries;
 };
