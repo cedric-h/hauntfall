@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 use specs::{prelude::*, Component};
+use std::fmt::Debug;
 
 pub mod player_anim;
 pub use player_anim::PlayerAnimationController;
@@ -82,7 +82,8 @@ impl AppearanceRecord {
     /// Panics if such an appearance can't be found.
     #[inline]
     pub fn appearance_of(&self, appearance: &str) -> Appearance {
-        self.try_appearance_of(appearance).unwrap_or_else(|e| panic!(e))
+        self.try_appearance_of(appearance)
+            .unwrap_or_else(|e| panic!(e))
     }
 
     #[inline]
@@ -91,15 +92,16 @@ impl AppearanceRecord {
             .iter()
             .position(|r| appearance == r.as_str())
             .map(|index| Appearance(index))
-            .ok_or_else(|| format!(
-                concat!(
-                    "Attempted to make an appearance from {:?},",
-                    "but no such appearance found in AppearanceRecord.",
-                    "Expected one of: {:?}",
-                ),
-                appearance,
-                self.0,
-            ))
+            .ok_or_else(|| {
+                format!(
+                    concat!(
+                        "Attempted to make an appearance from {:?},",
+                        "but no such appearance found in AppearanceRecord.",
+                        "Expected one of: {:?}",
+                    ),
+                    appearance, self.0,
+                )
+            })
     }
 }
 

@@ -6,20 +6,19 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::{fs::File, io::Read};
 
-fn f32_list_from_forge(forge_val: &Vec<forge::Value>) -> Result<Vec<f32>, &forge::Value> {
-    forge_val.iter().fold(Ok(Vec::new()), |acc, x| {
-        if let Ok(mut acc) = acc {
-            match x {
-                forge::Value::Number(f) => {
-                    acc.push(*f as f32);
-                    Ok(acc)
-                }
-                _ => Err(x),
+fn vec3_from_forge_list(forge_vals: &Vec<forge::Value>) -> Result<na::Vector3<f32>, &forge::Value> {
+    let mut vec: na::Vector3<f32> = na::zero();
+
+    for (index, val) in forge_vals.iter().enumerate() {
+        match val {
+            forge::Value::Number(f) => {
+                vec[index] = *f as f32;
             }
-        } else {
-            acc
+            _ => return Err(val),
         }
-    })
+    }
+
+    Ok(vec)
 }
 
 fn json_to_forge(json: serde_json::Value) -> forge::Value {
@@ -124,18 +123,24 @@ impl Level {
 
                     let mut builder = world.create_entity();
 
+                    // find location in map, add position component to entity.
+                    // log error otherwise.
                     if let Some(v::List(l)) = ent_map.get("location") {
-                        let loc = f32_list_from_forge(&l.borrow()).unwrap_or_else(|e| {
+                        let loc = vec3_from_forge_list(&l.borrow()).unwrap_or_else(|e| {
                             panic!(
                                 "Invalid data type in location list for {}, found: \"{}\"",
                                 ent_map.get("name").unwrap(),
                                 e
                             )
                         });
-                        builder = builder.with(Pos::vec(Vec2::new(loc[0], loc[1])))
+                        builder = builder.with(Pos::vec(loc.xy()))
                     } else {
                         error!("no location on entity {}", ent_map.get("name").unwrap())
                     }
+
+                    // find an appearance name in map, turn it into an appearance
+                    // component using the config, and add that to the entity.
+                    // if no appearance can be found, log an error.
                     if let Some(v::String(a)) = ent_map.get("appearance") {
                         let appearance_name = a.borrow();
                         builder = builder.with(
@@ -149,16 +154,21 @@ impl Level {
                     } else {
                         error!("no appearance on entity {}", ent_map.get("name").unwrap())
                     }
+
+                    // see if hitbox dimensions can be found in the map; if they can,
+                    // then this entity needs a hitbox.
                     if let Some(v::List(l)) = ent_map.get("hitbox_dimensions") {
-                        let d = f32_list_from_forge(&l.borrow()).unwrap_or_else(|e| {
+                        let dim = vec3_from_forge_list(&l.borrow()).unwrap_or_else(|e| {
                             panic!(
                                 "Invalid data type in hitbox_dimensions list for {}, found: \"{}\"",
                                 ent_map.get("name").unwrap(),
                                 e
                             )
                         });
-                        builder = builder.with(Hitbox::vec(Vec2::new(d[0], d[1]) / 2.0));
+                        builder = builder.with(Hitbox::vec(dim.xy() / 2.0));
                     }
+
+                    // finally build that entity
                     builder.build();
                 }
             }

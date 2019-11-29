@@ -111,7 +111,7 @@ pub mod net {
                 local_player: u32,
                 /// A record of which indexes refer to which appearance names.
                 appearance_record: crate::art::AppearanceRecord,
-            }
+            },
         }
     }
 

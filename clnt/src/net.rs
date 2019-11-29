@@ -219,7 +219,10 @@ impl<'a> System<'a> for HandleServerPackets {
                         }
                     }
 
-                    Establishment { local_player, appearance_record } => {
+                    Establishment {
+                        local_player,
+                        appearance_record,
+                    } => {
                         info!("establishment");
 
                         // start loading the assets we'll need
