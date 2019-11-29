@@ -45,7 +45,7 @@ pub struct Level {
 impl Level {
     pub fn from_name(level: String) -> Self {
         let map_path = format!("./levels/{}/map.json", level);
-        let script_path = format!("./levels/{}/script.rhai", level);
+        let script_path = format!("./levels/{}/script.fg", level);
 
         // parse the map
         let map_entries_json: Vec<HashMap<String, serde_json::Value>> =
@@ -70,14 +70,14 @@ impl Level {
                 .collect(),
         )));
 
-        // open the script.rhai file for the level
+        // open the script.fg file for the level
         let mut script = String::new();
         File::open(&script_path)
             .and_then(|mut f| f.read_to_string(&mut script))
             .unwrap_or_else(|e| {
                 panic!(
                     concat!(
-                        "couldn't read the script.rhai file at {}: {} ",
+                        "couldn't read the script.fg file at {}: {} ",
                         "Perhaps an invalid/nonexistent level name was ",
                         "provided in the hauntfall_server_config.toml?",
                     ),
