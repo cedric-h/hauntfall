@@ -30,7 +30,7 @@ impl<'a> System<'a> for MoveHeadings {
 
                 // 20 fps = 3, 60 fps = 1
                 let update_granularity = 1.0 / fps.0 * 60.0;
-                iso.0.translation.vector += dir.into_inner() * 0.135 * update_granularity;
+                iso.0.translation.vector += dir.into_inner() * 0.115 * update_granularity;
 
                 if let (true, Some(anim)) = (player_anim_control.is_some(), animaybe) {
                     use crate::art::player_anim::Direction::*;

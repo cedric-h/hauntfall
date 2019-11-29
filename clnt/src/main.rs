@@ -26,7 +26,7 @@ fn main() {
     // instantiate an ECS world to hold all of the systems, resources, and components.
     let mut world = World::new();
 
-    world.insert(comn::Fps(75.0));
+    world.insert(comn::Fps(80.0));
 
     // add systems and instantiate and order the other systems.
     #[rustfmt::skip]
@@ -34,7 +34,7 @@ fn main() {
         // controls
         .with(comn::controls::MoveHeadings,         "heading",      &[])
         .with(controls::MovementControl::default(), "move",         &[])
-        .with(controls::MouseControl::default(),    "click",        &[])
+        .with(controls::PickupItems::default(),     "click",        &[])
         // phys
         .with(comn::phys::Collision,                "collision",    &[])
         .with(net::SyncPositions,                   "sync phys",    &[])

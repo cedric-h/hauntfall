@@ -5,21 +5,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 struct RenderEntry {
     ent: u32,
-    appearance: Appearance,
     iso: Iso2,
 }
 stdweb::js_serializable!(RenderEntry);
 
-pub const ZOOM: f32 = 20.0;
-pub const CANVAS_ZOOM: f32 = 2.0; //change this in renderer.js
-pub const TOTAL_ZOOM: f32 = ZOOM * CANVAS_ZOOM;
+#[derive(Serialize, Deserialize)]
+struct AppearanceEntry {
+    ent: u32,
+    appearance_index: Appearance,
+}
+stdweb::js_serializable!(AppearanceEntry);
 
-pub struct Render;
-
-impl Default for Render {
-    fn default() -> Self {
-        Render
-    }
+#[derive(Default)]
+pub struct Render {
+    pub reader_id: Option<ReaderId<ComponentEvent>>,
 }
 
 impl<'a> System<'a> for Render {
@@ -30,17 +29,37 @@ impl<'a> System<'a> for Render {
     );
 
     fn run(&mut self, (ents, appearances, poses): Self::SystemData) {
-        // tiles are rendered as if their origin was their center on the X and Y.
-        // also, tiles are rendered first so that everything else can step on them.
-        let render_entries = (&*ents, &appearances, &poses)
+        let events = appearances.channel().read(self.reader_id.as_mut().unwrap());
+
+        for event in events {
+            match event {
+                ComponentEvent::Modified(id) | ComponentEvent::Inserted(id) => {
+                    js!(set_appearance(@{AppearanceEntry {
+                        ent: *id,
+                        appearance_index: appearances.get(ents.entity(*id))
+                            .expect("Couldn't read appearance on modification/insert to give to JS")
+                            .clone(),
+                    }}));
+                }
+                ComponentEvent::Removed(id) => {
+                    js!(clear_appearance(@{id}));
+                }
+            }
+        }
+
+        let render_entries = (&*ents, &poses)
             .join()
-            .map(|(ent, a, Pos(i))| RenderEntry {
+            .map(|(ent, Pos(i))| RenderEntry {
                 ent: ent.id(),
-                appearance: a.clone(),
                 iso: i.clone(),
             })
             .collect::<Vec<_>>();
 
         js!(render(@{render_entries}));
+    }
+
+    fn setup(&mut self, res: &mut World) {
+        Self::SystemData::setup(res);
+        self.reader_id = Some(WriteStorage::<Appearance>::fetch(&res).register_reader());
     }
 }

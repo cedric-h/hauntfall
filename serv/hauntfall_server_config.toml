@@ -1,0 +1,12 @@
+level = "basic"
+
+appearance_record = [
+    "StoneOutcroppingFloorRight",
+    "StoneOutcroppingFloorLeft",
+    "StoneOutcroppingFloorCorner",
+    "StoneOutcroppingFloorBottom",
+    "Skeleton",
+    "Lantern",
+    "StoneWall",
+    "Hammer",
+]

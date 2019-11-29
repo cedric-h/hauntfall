@@ -30,9 +30,6 @@ impl ServerConnection {
     * The server should definitely be in control of when new things are made,
     * even if indirectly the Client ends up requesting that to happen.
     * For that reason, this is prevented from working on the serverside.
-    * Instead, it's used internally to register a new player; if you send
-    * this request through hacking or some other means, you'll just get
-    * your player reset :grin:
     #[inline]
     pub fn new_ent(&self, ent: specs::Entity) {
     self.send(NetMessage::NewEnt(ent.id()));
@@ -107,7 +104,11 @@ impl Default for ServerConnection {
 use comn::net::UpdatePosition;
 pub struct SyncPositions;
 impl<'a> System<'a> for SyncPositions {
-    type SystemData = (WriteStorage<'a, Pos>, ReadStorage<'a, UpdatePosition>);
+    type SystemData = (
+        WriteStorage<'a, Pos>,
+        ReadStorage<'a, UpdatePosition>,
+        ReadStorage<'a, comn::controls::Heading>,
+    );
 
     // the idea here is to get wherever the client thinks something is to where the server has
     // it at within 10 ms.
@@ -115,7 +116,7 @@ impl<'a> System<'a> for SyncPositions {
     // If the internet is being slow and the update is from a while ago, however, it's probably
     // more apt to just rely on the physics simulation on the client than on the last position
     // the server sent; that way things in the simulation will still move.
-    fn run(&mut self, (mut currents, updates): Self::SystemData) {
+    fn run(&mut self, (mut currents, updates, headings): Self::SystemData) {
         for (
             Pos(Iso2 {
                 translation: at, ..
@@ -126,16 +127,12 @@ impl<'a> System<'a> for SyncPositions {
                 },
                 ..
             },
-        ) in (&mut currents, &updates).join()
+            heading,
+        ) in (&mut currents, &updates, &headings).join()
         {
-            /*
-            const LERP_DIST: f32 = 0.03;
-            let to_go = go.vector - at.vector;
-
-            if to_go.magnitude().abs() > 2.0 * LERP_DIST {
-            at.vector += to_go.normalize() * LERP_DIST;
-            } */
-            at.vector = at.vector.lerp(&go.vector, 0.03);
+            if !(heading.dir.magnitude() > 0.0) {
+                at.vector = at.vector.lerp(&go.vector, 0.03);
+            }
             /*
             current.rotation = na::UnitComplex::from_complex(
             current.rotation.complex()
@@ -150,18 +147,21 @@ pub struct ServerToLocalIds(pub BiMap<u32, u32>);
 
 #[derive(Default)]
 pub struct HandleServerPackets {
-    pub connection_established: bool,
+    connection_established: bool,
+    /// This system caches this value until it recieves it from the server,
+    /// then it can know the local id (not the server id) of the Player,
+    /// so it can then write to the Resource.
+    local_player_server_id: Option<u32>,
 }
 impl<'a> System<'a> for HandleServerPackets {
     type SystemData = (
         Entities<'a>,
         Write<'a, ServerToLocalIds>,
-        Write<'a, Player>,
         Read<'a, LazyUpdate>,
         Read<'a, ServerConnection>,
     );
 
-    fn run(&mut self, (ents, mut server_to_local_ids, mut player, lu, sc): Self::SystemData) {
+    fn run(&mut self, (ents, mut server_to_local_ids, lu, sc): Self::SystemData) {
         if let Ok(mut msgs) = sc.message_queue.try_lock() {
             for msg in msgs.drain(0..) {
                 // you know the connection is established when
@@ -180,8 +180,21 @@ impl<'a> System<'a> for HandleServerPackets {
                     NewEnt(server) => {
                         let local: u32 = ents.create().id();
                         server_to_local_ids.0.insert(server, local);
+
+                        // record address if the thing we're instantiating is the player
+                        if let Some(true) = self.local_player_server_id.map(|id| id == server) {
+                            trace!("found player!");
+                            lu.exec(move |world| {
+                                let mut player = world.write_resource::<Player>();
+                                player.0 = Some(world.entities().entity(local));
+                            });
+                            // no need to cache it now.
+                            self.local_player_server_id = None;
+                        }
                     }
+
                     InsertComp(id, net_comp) => {
+                        // figure out what that entity's id is on our side.
                         let ent = server_to_local_ids
                             .0
                             .get_by_left(&id)
@@ -194,20 +207,31 @@ impl<'a> System<'a> for HandleServerPackets {
                             });
 
                         if let Some(ent) = ent {
-                            match net_comp {
-                                // I should really have some sort of
-                                // Establishment packet that deals with this.
-                                NetComponent::LocalPlayer(_) => {
-                                    player.0 = Some(ent);
-                                }
-                                _ => net_comp.insert(ent, &lu),
-                            }
+                            // if they're alive, insert,
+                            net_comp.insert(ent, &lu);
                         } else {
+                            // otherwise just throw an error,
+                            // why is the server telling us about dead people?
                             error!(
                                 "Can't insert component for dead entity, component: {:?}",
                                 net_comp
                             );
                         }
+                    }
+
+                    Establishment { local_player, appearance_record } => {
+                        info!("establishment");
+
+                        // start loading the assets we'll need
+                        js!(load_assets(@{appearance_record.clone().0}));
+
+                        // store that in the ECS
+                        lu.exec_mut(move |world| {
+                            world.insert(appearance_record);
+                        });
+
+                        // store our server ID until the server tells us about it.
+                        self.local_player_server_id = Some(local_player);
                     }
                 }
             }

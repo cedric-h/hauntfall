@@ -9,7 +9,7 @@ use stdweb::{
     traits::IKeyboardEvent,
     web::{
         document,
-        event::{ConcreteEvent, DoubleClickEvent, KeyPressEvent, KeyUpEvent},
+        event::{ConcreteEvent, KeyPressEvent, KeyUpEvent},
         IEventTarget,
     },
 };
@@ -87,30 +87,30 @@ impl<'a> System<'a> for MovementControl {
     }
 }
 
-pub struct MouseControl {
-    mouse_events: Arc<Mutex<Vec<Vec2>>>,
+/// The player pressed the key for picking up an item.
+pub struct PickupItems {
+    pickup_presses: Arc<Mutex<usize>>,
 }
-impl Default for MouseControl {
+impl Default for PickupItems {
     fn default() -> Self {
-        let mouse_events = Arc::new(Mutex::new(Vec::new()));
+        let pickup_presses = Arc::new(Mutex::new(0));
 
         document().add_event_listener({
-            use crate::stdweb::traits::IMouseEvent;
-            let mouse_events = mouse_events.clone();
+            let pickup_presses = pickup_presses.clone();
 
-            move |e: DoubleClickEvent| {
-                trace!("click!");
-                mouse_events
-                    .lock()
-                    .expect("Can't lock mouse_events to insert event")
-                    .push(Vec2::new(e.client_x() as f32, e.client_y() as f32));
+            move |e: KeyPressEvent| {
+                if let (true, Some('e')) = (!e.repeat(), e.key().chars().next()) {
+                    *pickup_presses
+                        .lock()
+                        .expect("Can't lock pickup_presses to insert event") += 1;
+                }
             }
         });
 
-        Self { mouse_events }
+        Self { pickup_presses }
     }
 }
-impl<'a> System<'a> for MouseControl {
+impl<'a> System<'a> for PickupItems {
     type SystemData = (
         Entities<'a>,
         Read<'a, ServerConnection>,
@@ -122,31 +122,30 @@ impl<'a> System<'a> for MouseControl {
 
     fn run(&mut self, (ents, sc, server_to_local_ids, player, items, poses): Self::SystemData) {
         use comn::item::{PickupRequest, MAX_INTERACTION_DISTANCE_SQUARED};
-        const MAX_ITEM_TO_MOUSE_DISTANCE_SQUARED: f32 = {
-            let f = 2.0;
-            f * f
-        };
 
-        if let (Ok(mut mouse_events), Some(player_entity)) = (self.mouse_events.lock(), player.0) {
+        if let (Ok(mut pickup_presses), Some(player_entity)) =
+            (self.pickup_presses.lock(), player.0)
+        {
             let Pos(Iso2 {
                 translation: player_translation,
                 ..
             }) = match poses.get(player_entity) {
                 Some(p) => p,
                 // we have a player, but it doesn't have a location yet?
-                // well that's fine, but clicking anything just isn't gonna work.
+                // well that's fine, but tryna pick up anything just isn't gonna work.
                 _ => {
-                    trace!("can't look for click; player no pos");
+                    trace!("can't look for pickup press; player no pos");
                     return;
                 }
             };
 
-            for screen_click in mouse_events.drain(..) {
-                trace!("mouse event!");
-                let click = screen_click / crate::renderer::TOTAL_ZOOM;
+            for _pickup_press in 0..*pickup_presses {
+                trace!("pickup press event!");
+
+                // grab the entity that's closest to the player
                 if let Some(&id) = (&*ents, &poses, &items)
                     .join()
-                    // returns (the entity of that item, that item's distance from the mouse)
+                    // returns (the entity of that item, that item's distance from the player^2)
                     .filter_map(
                         |(
                             item_entity,
@@ -156,31 +155,20 @@ impl<'a> System<'a> for MouseControl {
                             }),
                             _,
                         )| {
-                            trace!("click detected: {}", click);
                             // first see if the item is close enough to the mouse
-                            let item_to_click_distance_squared =
-                                (item_translation.vector - click).magnitude_squared();
+                            let item_to_player_distance_squared = (item_translation.vector
+                                - player_translation.vector)
+                                .magnitude_squared();
 
-                            if item_to_click_distance_squared < MAX_ITEM_TO_MOUSE_DISTANCE_SQUARED
-                                && ({
-                                    trace!("mouse click was close enough to item...");
-                                    // if that's true, make sure it's also close enough to the player.
-                                    let item_to_player_distance_squared =
-                                        (player_translation.vector - item_translation.vector)
-                                            .magnitude_squared();
-
-                                    item_to_player_distance_squared
-                                        < MAX_INTERACTION_DISTANCE_SQUARED
-                                })
-                            {
-                                trace!("click close enough to item and player!");
-                                Some((item_entity, item_to_click_distance_squared))
+                            if item_to_player_distance_squared < MAX_INTERACTION_DISTANCE_SQUARED {
+                                trace!("item close enough!");
+                                Some((item_entity, item_to_player_distance_squared))
                             } else {
                                 trace!(
                                     "click too far away: {}\nitem: {}\ndistance: {}",
-                                    click,
+                                    player_translation.vector,
                                     item_translation.vector,
-                                    item_to_click_distance_squared.sqrt()
+                                    item_to_player_distance_squared.sqrt()
                                 );
                                 None
                             }
@@ -197,6 +185,7 @@ impl<'a> System<'a> for MouseControl {
                     sc.insert_comp(PickupRequest { id });
                 }
             }
+            *pickup_presses = 0;
         }
     }
 }

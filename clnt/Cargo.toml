@@ -9,7 +9,7 @@ edition = "2018"
 default = ["stdweb-logger"]
 
 [dependencies]
-comn = { path = "../comn" }
+comn = { path = "../comn", features = ["client"] }
 stdweb = "0.4.20"
 
 # logging

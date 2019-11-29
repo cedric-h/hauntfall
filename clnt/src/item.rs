@@ -71,14 +71,17 @@ impl<'a> System<'a> for UpdateInventory {
 
         for (ent, inventory) in (&*ents, inventories.drain()).join() {
             let player_id = ent.id().to_string();
+
+            // either the inventory div exists,
             let inventory_div = match document().get_element_by_id(&player_id) {
+                // meaning that it needs to be grabbed and cleared before use,
                 Some(div) => {
-                    // clear the items from last time.
                     for _ in 0..div.child_nodes().len() {
                         div.remove_child(&div.first_child().unwrap()).unwrap();
                     }
                     div
                 }
+                // or it doesn't exist, so it needs to be made.
                 None => {
                     let div = document().create_element("div").unwrap();
 
@@ -125,6 +128,7 @@ impl<'a> System<'a> for UpdateInventory {
                         let new_img = ImageElement::with_size(64, 64);
                         new_img.class_list().add("item").unwrap();
                         new_img.set_src(&image_path);
+                        new_img.set_alt(&image_path);
 
                         let slot_div = document().create_element("div").unwrap();
                         slot_div.class_list().add("item_wrapper").unwrap();
@@ -184,17 +188,26 @@ impl<'a> System<'a> for UpdateInventory {
 /// This system removes the Pos component from entities
 /// with the comn::item::Deposition Component, making the entities
 /// unable to exist physically, effectively turning them into items.
+///
+/// On the client, because of three.js ruining everything, we have to
+/// also remove the Appearance component as well to make them disappear.
 pub struct DepositionItems;
 impl<'a> System<'a> for DepositionItems {
     type SystemData = (
         Entities<'a>,
         WriteStorage<'a, Deposition>,
+        WriteStorage<'a, Appearance>,
         WriteStorage<'a, Pos>,
     );
 
-    fn run(&mut self, (ents, mut deposes, mut poses): Self::SystemData) {
+    fn run(&mut self, (ents, mut deposes, mut appearances, mut poses): Self::SystemData) {
         for (ent, _) in (&*ents, deposes.drain()).join() {
-            poses.remove(ent).expect("Couldn't deposition entity");
+            appearances
+                .remove(ent)
+                .expect("Couldn't deposition an entity by removing it's appearance.");
+            poses
+                .remove(ent)
+                .expect("Couldn't literally deposition an entity");
         }
     }
 }

@@ -1,6 +1,5 @@
 #![feature(stmt_expr_attributes)]
 
-pub use enum_iterator;
 pub use nalgebra as na;
 pub use ncollide2d as collide;
 pub use rmp_serde as rmps;
@@ -31,6 +30,14 @@ impl Pos {
 
 #[derive(Clone, Debug, Component, Serialize, Deserialize)]
 pub struct Hitbox(pub Cuboid<f32>);
+
+impl Hitbox {
+    /// Create a Hitbox from its half extents.
+    /// (i.e. it will be twice as large as the provided numbers on each axis)
+    pub fn vec(vec: Vec2) -> Self {
+        Self(Cuboid::new(vec))
+    }
+}
 
 #[derive(Default)]
 pub struct Fps(pub f32);
@@ -84,9 +91,27 @@ pub mod net {
         use serde::{Deserialize, Serialize};
 
         #[derive(Deserialize, Serialize, Debug)]
+        /// All possible messages that can be sent between the client and server.
         pub enum NetMessage {
+            /// Instructs the client to create a new entity.
+            /// This is also internally sent from the client to the server
+            /// to establish the connection. If it's sent after the connection
+            /// is established, it's simply ignored.
             NewEnt(u32),
+
+            /// Inserts (possibly overwriting an existing component) a component
+            /// on the client. On the server, the `u32` is ignored, and components
+            /// can only be inserted onto the client that requested them.
             InsertComp(u32, NetComponent),
+
+            /// Contains all of the important data necessary to connect a new client to the game.
+            /// If it's sent from the client to the server, it's ignored.
+            Establishment {
+                /// Tells the local client which of the entities they are.
+                local_player: u32,
+                /// A record of which indexes refer to which appearance names.
+                appearance_record: crate::art::AppearanceRecord,
+            }
         }
     }
 

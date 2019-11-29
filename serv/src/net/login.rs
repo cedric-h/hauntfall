@@ -63,26 +63,28 @@ impl<'a> System<'a> for SendWorldToNewPlayers {
     }
 }
 
+const PLAYER_APPEARANCE: &'static str = "Skeleton";
 pub struct SpawnNewPlayers;
 impl<'a> System<'a> for SpawnNewPlayers {
     type SystemData = (
         Entities<'a>,
         Read<'a, ConnectionManager>,
+        Read<'a, comn::art::AppearanceRecord>,
         Read<'a, LazyUpdate>,
         WriteStorage<'a, comn::net::SpawnPlayer>,
         ReadStorage<'a, Client>,
     );
 
-    fn run(&mut self, (ents, cm, lu, mut players_to_spawn, clients): Self::SystemData) {
-        use comn::{
-            art::{self, Animate, Appearance},
-            item, net, Cuboid, Hitbox,
-        };
+    fn run(
+        &mut self,
+        (ents, cm, appear_record, lu, mut players_to_spawn, clients): Self::SystemData,
+    ) {
+        use comn::{art, item, Cuboid, Hitbox};
         for (_, ent, Client(new_player_addr)) in (players_to_spawn.drain(), &*ents, &clients).join()
         {
             trace!("spawning new player!");
             // these are the components the entity will have.
-            let appearance = Appearance::Skeleton;
+            let appearance = appear_record.appearance_of(PLAYER_APPEARANCE);
             let iso = Pos(Iso2::translation(1.0, 1.0));
             //let animate = Animate::new();
             let hitbox = Hitbox(Cuboid::new(Vec2::new(0.5, 0.25)));
@@ -104,7 +106,6 @@ impl<'a> System<'a> for SpawnNewPlayers {
                 cm.insert_comp(*addr, ent, hitbox.clone());
                 cm.insert_comp(*addr, ent, art::PlayerAnimationController);
                 if addr == new_player_addr {
-                    cm.insert_comp(*addr, ent, net::LocalPlayer);
                     debug!("so we did tell them about themself");
                 }
             }

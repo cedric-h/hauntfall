@@ -1,5 +1,5 @@
-use enum_iterator::IntoEnumIterator;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use specs::{prelude::*, Component};
 
 pub mod player_anim;
@@ -73,19 +73,53 @@ pub struct SpritesheetData {
     pub frame_height: usize,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug, IntoEnumIterator, Component, Serialize, Deserialize)]
+/// AppearanceRecord stores which Appearances are currently loaded into the game
+/// and ready to be used. Normally, they're inserted from the config::Server.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceRecord(pub Vec<String>);
+impl AppearanceRecord {
+    /// Creates an Appearance component with the given name.
+    /// Panics if such an appearance can't be found.
+    #[inline]
+    pub fn appearance_of(&self, appearance: &str) -> Appearance {
+        self.try_appearance_of(appearance).unwrap_or_else(|e| panic!(e))
+    }
+
+    #[inline]
+    pub fn try_appearance_of(&self, appearance: &str) -> Result<Appearance, String> {
+        self.0
+            .iter()
+            .position(|r| appearance == r.as_str())
+            .map(|index| Appearance(index))
+            .ok_or_else(|| format!(
+                concat!(
+                    "Attempted to make an appearance from {:?},",
+                    "but no such appearance found in AppearanceRecord.",
+                    "Expected one of: {:?}",
+                ),
+                appearance,
+                self.0,
+            ))
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Serialize, Deserialize)]
+/// Something's index into the AppearanceRecord; which out of any of those possible
+/// appearances they have.
+///
 /// Behavior can affect how something is rendered on the client, but
 /// the appearance should never affect the behavior.
 /// Therefore, this component isn't really used on the server all that much
 /// except for when it needs to be sent down to the clients.
-pub enum Appearance {
-    StoneOutcroppingFloorRight,
-    StoneOutcroppingFloorLeft,
-    StoneOutcroppingFloorCorner,
-    StoneOutcroppingFloorBottom,
-    Skeleton,
-    Lantern,
-    StoneWall,
+pub struct Appearance(usize);
+
+#[cfg(feature = "flagged_appearances")]
+impl Component for Appearance {
+    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
+}
+#[cfg(not(feature = "flagged_appearances"))]
+impl Component for Appearance {
+    type Storage = DenseVecStorage<Self>;
 }
 
 lazy_static::lazy_static! {

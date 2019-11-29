@@ -8,13 +8,21 @@ impl<'a> System<'a> for HandleClientPackets {
         Write<'a, ConnectionManager>,
         Entities<'a>,
         Read<'a, LazyUpdate>,
+        Read<'a, comn::art::AppearanceRecord>,
         WriteStorage<'a, Client>,
         WriteStorage<'a, LoggingIn>,
     );
 
     fn run(
         &mut self,
-        (mut cm, ents, lu, mut clients, mut logging_ins/*, mut register_players*/): Self::SystemData,
+        (
+            mut cm,
+            ents,
+            lu,
+            appear_record,
+            mut clients,
+            mut logging_ins, /*, mut register_players*/
+        ): Self::SystemData,
     ) {
         while let Ok((addr, net_msg)) = cm.from_clients.try_recv() {
             match net_msg {
@@ -22,10 +30,20 @@ impl<'a> System<'a> for HandleClientPackets {
                 // when a connection to a client has been established.
                 NetMessage::NewEnt(_) => {
                     // if we've already registered their address... they're already connected.
+                    // ignore it.
                     if cm.addr_to_ent.get(&addr).is_none() {
                         // otherwise, welcome!
                         let ent = ents.create();
                         info!("New Player joined, assigned entity {}", ent.id());
+
+                        // first send some vital information to that new player
+                        cm.send(
+                            addr,
+                            NetMessage::Establishment {
+                                local_player: ent.id(),
+                                appearance_record: (*appear_record).clone(),
+                            },
+                        );
 
                         clients.insert(ent, Client(addr.clone())).unwrap();
                         logging_ins.insert(ent, LoggingIn).unwrap();
@@ -44,6 +62,10 @@ impl<'a> System<'a> for HandleClientPackets {
                     } else {
                         comp.insert(ent, &lu);
                     }
+                }
+
+                NetMessage::Establishment { .. } => {
+                    error!("Client {:?} sent establishment packet!", addr)
                 }
             }
         }

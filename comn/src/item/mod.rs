@@ -151,7 +151,7 @@ impl Inventory {
                 self.items.remove(&index);
 
                 Err(Error::InvalidSlotIndex)
-            },
+            }
         }
     }
 
@@ -228,7 +228,10 @@ fn inventory_integration() {
     // make sure loose slots work
     while let Ok(_) = inv.insert(0, &Item::Misc) {}
 
-    let loose = inv.loose().map(|(i, e)| (i.clone(), e.clone())).collect::<Vec<_>>();
+    let loose = inv
+        .loose()
+        .map(|(i, e)| (i.clone(), e.clone()))
+        .collect::<Vec<_>>();
 
     use SlotIndex::Loose;
     vec![
@@ -254,11 +257,13 @@ fn inventory_integration() {
     });
 
     // make sure that each slot is empty (that we cleared it)
-    inv.loose().for_each(|(i, e)| assert!(
-        e.is_none(),
-        "There's an extra slot at {:?} that shouldn't be there.",
-        i,
-    ));
+    inv.loose().for_each(|(i, e)| {
+        assert!(
+            e.is_none(),
+            "There's an extra slot at {:?} that shouldn't be there.",
+            i,
+        )
+    });
 }
 
 /// A SlotIndex refers to a particular place in an Inventory.
