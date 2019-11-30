@@ -22,4 +22,10 @@ specs = { version = "0.15.0", features = ["specs-derive", "serde"], default-feat
 # serialization
 serde = { version = "1.0.102", features = ["derive"] }
 rmp-serde = "0.14.0"
+
+# script
+pyo3 = "0.8.3"
+
+# util
+strum_macros = "0.16.0"
 lazy_static = "1.4.0"

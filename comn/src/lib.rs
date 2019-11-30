@@ -3,6 +3,7 @@
 pub use nalgebra as na;
 pub use ncollide2d as collide;
 pub use rmp_serde as rmps;
+pub use strum_macros as strum;
 pub use serde;
 pub use specs;
 

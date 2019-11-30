@@ -85,7 +85,7 @@ impl<'a> System<'a> for SpawnNewPlayers {
         {
             trace!("spawning new player!");
             // these are the components the entity will have.
-            let appearance = appear_record.appearance_of(PLAYER_APPEARANCE);
+            let appearance = appear_record.try_appearance_of(PLAYER_APPEARANCE).unwrap();
             let iso = Pos(Iso2::translation(1.0, 1.0));
             //let animate = Animate::new();
             let hitbox = Hitbox(Cuboid::new(Vec2::new(0.5, 0.25)));

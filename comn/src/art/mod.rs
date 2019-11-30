@@ -1,9 +1,97 @@
 use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
 use std::fmt::Debug;
+// scripting
+use pyo3::{prelude::*, PyRawObject, types::PyAny};
 
 pub mod player_anim;
 pub use player_anim::PlayerAnimationController;
+
+#[pyclass]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Serialize, Deserialize)]
+/// Something's index into the AppearanceRecord; which out of any of those possible
+/// appearances they have.
+///
+/// Behavior can affect how something is rendered on the client, but
+/// the appearance should never affect the behavior.
+/// Therefore, this component isn't really used on the server all that much
+/// except for when it needs to be sent down to the clients.
+pub struct Appearance {
+    #[pyo3(get, set)]
+    index: usize
+}
+#[pymethods]
+impl Appearance {
+    #[new]
+    fn new(obj: &PyRawObject, index: u64) {
+        obj.init(Appearance {
+            index: index as usize
+        });
+    }
+}
+impl<'source> FromPyObject<'source> for Appearance {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        Ok(Appearance {
+            index: ob.extract::<u64>()? as usize
+        })
+    }
+}
+#[cfg(feature = "flagged_appearances")]
+impl Component for Appearance {
+    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
+}
+#[cfg(not(feature = "flagged_appearances"))]
+impl Component for Appearance {
+    type Storage = DenseVecStorage<Self>;
+}
+
+#[pyclass]
+/// AppearanceRecord stores which Appearances are currently loaded into the game
+/// and ready to be used. Normally, they're inserted from the config::Server.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceRecord {
+    pub names: Vec<String>,
+}
+#[pymethods]
+impl AppearanceRecord {
+    #[new]
+    fn new(obj: &PyRawObject, names: Vec<String>) {
+        obj.init(Self { names })
+    }
+
+    /// Creates an Appearance component with the given name.
+    /// Panics if such an appearance can't be found.
+    pub fn appearance_of(&self, appearance: &str) -> PyResult<Appearance> {
+        Ok(self.try_appearance_of(appearance)
+            .unwrap_or_else(|e| panic!(e)))
+    }
+}
+impl ToPyObject for AppearanceRecord {
+    fn to_object(&self, py: Python) -> PyObject {
+        let d = pyo3::PyRef::new(py, self.clone()).unwrap();
+        d.to_object(py)
+    }
+}
+impl AppearanceRecord {
+    #[inline]
+    pub fn try_appearance_of(&self, appearance: &str) -> Result<Appearance, String> {
+        self.names
+            .iter()
+            .position(|r| appearance == r.as_str())
+            .map(|index| Appearance { index })
+            .ok_or_else(|| {
+                format!(
+                    concat!(
+                        "Attempted to make an appearance from {:?},",
+                        "but no such appearance found in AppearanceRecord.",
+                        "Expected one of: {:?}",
+                    ),
+                    appearance, self.names,
+                )
+            })
+    }
+}
+
 
 #[derive(Clone, Debug, Default, Component, Serialize, Deserialize)]
 /// Entities with this component are rendered at a special stage on the client,
@@ -71,57 +159,6 @@ pub struct SpritesheetData {
     pub rows: Vec<AnimationData>,
     pub frame_width: usize,
     pub frame_height: usize,
-}
-
-/// AppearanceRecord stores which Appearances are currently loaded into the game
-/// and ready to be used. Normally, they're inserted from the config::Server.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct AppearanceRecord(pub Vec<String>);
-impl AppearanceRecord {
-    /// Creates an Appearance component with the given name.
-    /// Panics if such an appearance can't be found.
-    #[inline]
-    pub fn appearance_of(&self, appearance: &str) -> Appearance {
-        self.try_appearance_of(appearance)
-            .unwrap_or_else(|e| panic!(e))
-    }
-
-    #[inline]
-    pub fn try_appearance_of(&self, appearance: &str) -> Result<Appearance, String> {
-        self.0
-            .iter()
-            .position(|r| appearance == r.as_str())
-            .map(|index| Appearance(index))
-            .ok_or_else(|| {
-                format!(
-                    concat!(
-                        "Attempted to make an appearance from {:?},",
-                        "but no such appearance found in AppearanceRecord.",
-                        "Expected one of: {:?}",
-                    ),
-                    appearance, self.0,
-                )
-            })
-    }
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Debug, Serialize, Deserialize)]
-/// Something's index into the AppearanceRecord; which out of any of those possible
-/// appearances they have.
-///
-/// Behavior can affect how something is rendered on the client, but
-/// the appearance should never affect the behavior.
-/// Therefore, this component isn't really used on the server all that much
-/// except for when it needs to be sent down to the clients.
-pub struct Appearance(usize);
-
-#[cfg(feature = "flagged_appearances")]
-impl Component for Appearance {
-    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
-}
-#[cfg(not(feature = "flagged_appearances"))]
-impl Component for Appearance {
-    type Storage = DenseVecStorage<Self>;
 }
 
 lazy_static::lazy_static! {

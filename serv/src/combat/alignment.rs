@@ -1,8 +1,11 @@
 use comn::prelude::*;
+use comn::strum::{Display, EnumIter, EnumString};
+use pyo3::{prelude::*, types::PyAny};
 use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
+use strum::IntoEnumIterator;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Component)]
+#[derive(Debug, Clone, Copy, Display, EnumString, EnumIter, Serialize, Deserialize, Component)]
 /// The alignment of a particular Entity;
 /// which team it's on.
 ///
@@ -16,6 +19,25 @@ pub enum Alignment {
     Enemies,
     All,
     Neither,
+}
+impl<'source> FromPyObject<'source> for Alignment {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let s: &str = ob.extract()?;
+        Ok(Alignment::str(s).unwrap())
+    }
+}
+impl Alignment {
+    #[inline]
+    pub fn str(s: &str) -> Result<Self, String> {
+        use std::str::FromStr;
+        Alignment::from_str(s).map_err(|_| {
+            format!(
+                "{} is not an Alignment! Alignment must be one of: {:?}",
+                s,
+                Alignment::iter().collect::<Vec<_>>(),
+            )
+        })
+    }
 }
 impl PartialEq for Alignment {
     fn eq(&self, other: &Self) -> bool {

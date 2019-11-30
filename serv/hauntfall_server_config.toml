@@ -1,6 +1,6 @@
 level = "basic"
 
-appearance_record = [
+appearance_record.names = [
     "StoneOutcroppingFloorRight",
     "StoneOutcroppingFloorLeft",
     "StoneOutcroppingFloorCorner",

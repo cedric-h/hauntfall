@@ -1,9 +1,12 @@
 use comn::{prelude::*, vec_of_pos};
+use pyo3::{prelude::*, types::PyAny};
 use specs::{prelude::*, Component};
+use std::string::ToString;
 
 mod alignment;
 pub use alignment::Alignment;
 
+#[pyclass]
 #[derive(Debug, Clone, Component)]
 /// Entities with this component will chase other entities
 /// who have an Alignment component that matches the one in
@@ -14,25 +17,42 @@ pub use alignment::Alignment;
 pub struct Chaser {
     /// Entities
     pub target: Alignment,
+    #[pyo3(get, set)]
     pub distance_squared: f32,
+    #[pyo3(get, set)]
     pub speed: f32,
 }
-pub struct ChaserBuilder {
-    pub target: Alignment,
-    pub distance: f32,
-    pub speed: f32,
-}
-impl ChaserBuilder {
-    pub fn build(self) -> Chaser {
-        let ChaserBuilder {
-            target,
-            distance,
-            speed,
-        } = self;
-        Chaser {
-            target,
-            speed,
+#[pymethods]
+impl Chaser {
+    #[new]
+    fn new(obj: &PyRawObject, target: String, distance: f32, speed: f32) {
+        obj.init(Self {
+            target: Alignment::str(&target).unwrap(),
             distance_squared: distance.powi(2),
+            speed,
+        })
+    }
+
+    #[getter]
+    fn get_target(&self) -> String {
+        self.target.to_string()
+    }
+    #[setter]
+    fn set_target(&mut self, value: String) {
+        self.target = Alignment::str(&value).unwrap();
+    }
+}
+
+impl<'source> FromPyObject<'source> for Chaser {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        unsafe {
+            let py = Python::assume_gil_acquired();
+            let obj = ob.to_object(py);
+            Ok(Self {
+                speed: obj.getattr(py, "speed")?.extract(py)?,
+                distance_squared: obj.getattr(py, "distance")?.extract::<f32>(py)?.powi(2),
+                target: obj.getattr(py, "target")?.extract(py)?,
+            })
         }
     }
 }
