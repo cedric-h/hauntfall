@@ -23,7 +23,10 @@ trait ComponentFactory {
 }
 
 struct ComponentEntry<C: PyTypeInfo + Debug + Component + Clone + Send + Sync> {
-    p: PhantomData<C>,
+    pd: PhantomData<C>,
+}
+impl<C: PyTypeInfo + Debug + Component + Clone + Send + Sync> ComponentEntry<C> {
+    const INSTANCE: Self = Self { pd: PhantomData };
 }
 impl<C: PyTypeInfo + Component + Debug + Clone + Send + Sync> ComponentFactory
     for ComponentEntry<C>
@@ -45,15 +48,14 @@ impl<C: PyTypeInfo + Component + Debug + Clone + Send + Sync> ComponentFactory
     }
 }
 
-struct ComponentFactoryRegistry(Vec<Box<dyn ComponentFactory>>);
+struct ComponentFactoryRegistry(Vec<&'static dyn ComponentFactory>);
 impl ComponentFactoryRegistry {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
     pub fn register<C: PyTypeInfo + Component + Debug + Clone + Send + Sync>(&mut self) {
-        self.0
-            .push(Box::new(ComponentEntry::<C> { p: PhantomData }));
+        self.0.push(&ComponentEntry::<C>::INSTANCE);
     }
 
     pub fn try_py_insert<'p>(
