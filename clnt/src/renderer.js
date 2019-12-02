@@ -13,10 +13,9 @@ const scene = new THREE.Scene();
 
 // camera setup
 const camera = new THREE.PerspectiveCamera(39.6, window.innerWidth / window.innerHeight, 0.01, 100);
-camera.position.y = 20;
-camera.position.x = 15;
-camera.position.z = 15;
-camera.position.multiplyScalar(0.75);
+const cam_offset = new THREE.Vector3(15, 20, 15);
+cam_offset.multiplyScalar(0.75);
+camera.position.copy(cam_offset);
 camera.lookAt(0, 0, 0);
 
 /*
@@ -66,9 +65,11 @@ function load_assets(a_ns) {
 
 			// give every entity that was waiting for this asset to load
 			// its new appearance, now that it's loaded.
+			//console.log('prepare: ' + index);
 			for (const loading_ent in loading_appearance_indexes) {
+				//console.log(loading_appearance_indexes[loading_ent] + " has been queued to load");
 				if (loading_appearance_indexes[loading_ent] == index) {
-					console.log("now that " + name + " is loaded, we're assigning it")
+					//console.log("now that " + name + " is loaded, we're assigning it")
 					set_appearance({ent: loading_ent, appearance_index: index});
 					delete loading_appearance_indexes[loading_ent];
 				}
@@ -90,10 +91,12 @@ document.body.appendChild(renderer.domElement);
 function set_appearance({ent, appearance_index}) {
 	if (!(appearance_index in appearances)) {
 		// if they want a mesh that isn't loaded yet, we'll store the name of it.
+		//console.log("queing " + appearance_index + " mesh to load");
 		loading_appearance_indexes[ent] = appearance_index;
 		return;
 	}
 
+	//console.log("actually making mesh");
 	let mesh = appearances[appearance_index].clone();
 	scene.add(mesh);
 	meshes[ent] = mesh;
@@ -110,21 +113,23 @@ function clear_appearance(ent) {
 	}
 }
 
-//let cam_dir_vec = new THREE.Vector3(0.0, 0.0, 0.0);
-function render(ents) {
-	ents.forEach(({ent, iso}) => {
+const cam = new THREE.Vector3(0.0, 0.0, 0.0);
+function render(ents, player) {
+	ents.forEach(({ent, rot, iso}) => {
 		let mesh = meshes[ent];
 
 		if (mesh != undefined) {
 			//mesh.quaternion.fromArray(iso.rotation);
 			let t = iso.translation;
 			mesh.position.fromArray([t[0], 0, -t[1]]);
+			mesh.rotation.y = rot;
 		} else {
 			console.log("We can't position a mesh because the mesh doesn't exist");
 		}
 	});
 
-	//camera.lookAt(cam_dir_vec.fromArray(camera_direction).add(camera.position));
+	camera.position.fromArray([player.vec[0], 0, -player.vec[1]]);
+	camera.position.add(cam_offset);
 
 	//composer.render(scene, camera); 
 	renderer.render(scene, camera); 

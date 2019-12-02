@@ -1,6 +1,6 @@
 use crate::{
     art::{player_anim::PlayerAnimation, Animate, PlayerAnimationController},
-    controls::Heading,
+    controls::{Heading, Speed},
     prelude::*,
     Fps,
 };
@@ -11,26 +11,29 @@ impl<'a> System<'a> for MoveHeadings {
     type SystemData = (
         Read<'a, Fps>,
         WriteStorage<'a, Pos>,
-        WriteStorage<'a, Heading>,
         WriteStorage<'a, Animate>,
+        WriteStorage<'a, Heading>,
+        ReadStorage<'a, Speed>,
         ReadStorage<'a, PlayerAnimationController>,
     );
 
-    fn run(&mut self, (fps, mut isos, mut heads, mut animates, anim_controls): Self::SystemData) {
-        for (iso, &mut Heading { mut dir }, player_anim_control, animaybe) in (
+    fn run(&mut self, (fps, mut isos, mut animates, mut heads, speeds, anim_controls): Self::SystemData) {
+        for (pos, &mut Heading { mut dir }, speed, player_anim_control, animaybe) in (
             &mut isos,
             &mut heads,
+            &speeds,
             anim_controls.maybe(),
             (&mut animates).maybe(),
         )
             .join()
         {
             if dir.magnitude() > 0.0 {
+                // TODO: optimize this
                 dir.renormalize();
 
                 // 20 fps = 3, 60 fps = 1
                 let update_granularity = 1.0 / fps.0 * 60.0;
-                iso.0.translation.vector += dir.into_inner() * 0.115 * update_granularity;
+                pos.iso.translation.vector += dir.into_inner() * speed.speed * update_granularity;
 
                 if let (true, Some(anim)) = (player_anim_control.is_some(), animaybe) {
                     use crate::art::player_anim::Direction::*;

@@ -51,16 +51,22 @@ fn main() {
     world.insert(comn::Fps(20.0));
     #[rustfmt::skip]
     let mut dispatcher = DispatcherBuilder::new()
+        // combat
+        .with(combat::LaunchAttacks,        "attack",           &[])
+        .with(combat::DealDamage,           "damage",           &["attack"])
         .with(combat::Chase,                "chase",            &[])
-        .with(pickup::ItemPickupDrop,       "pickup",           &[])
-        .with(comn::art::UpdateAnimations,  "animate",          &[])
+        // phys
         .with(comn::phys::Collision,        "collision",        &[])
         .with(comn::controls::MoveHeadings, "heading",          &[])
+        // net/util
         .with(net::SendWorldToNewPlayers,   "send world",       &[])
         .with(net::HandleClientPackets,     "client packets",   &["send world"])
         .with(net::SpawnNewPlayers,         "new players",      &["client packets"])
         .with(comn::dead::ClearDead,        "clear dead",       &["client packets"])
         .with(net::SendNewPositions,        "send pos",         &["clear dead"])
+        // misc
+        .with(comn::art::UpdateAnimations,  "animate",          &[])
+        .with(pickup::ItemPickupDrop,       "pickup",           &[])
         .build();
 
     dispatcher.setup(&mut world);

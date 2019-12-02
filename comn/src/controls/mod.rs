@@ -1,4 +1,3 @@
-use super::{na, Vec2};
 use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
 
@@ -12,9 +11,58 @@ pub use movement::MoveHeadings;
 /// NOTE: This isn't used atm.
 pub struct Camera;
 
-#[derive(Clone, Debug, Component, Serialize, Deserialize)]
-/// Where would the Client like to go?
-/// Note that the server isn't necessarily going to actually get them there.
-pub struct Heading {
-    pub dir: na::Unit<Vec2>,
+mod moving {
+    #[cfg(feature = "python")]
+    use pyo3::prelude::*;
+    #[cfg(feature = "python")]
+    use crate::PyVec2;
+    use crate::prelude::*;
+    use serde::{Deserialize, Serialize};
+    use specs::{prelude::*, Component};
+
+    #[cfg(feature = "python")]
+    #[pyclass]
+    #[derive(Clone, Debug, Component, Serialize, Deserialize)]
+    /// How much should we move your Heading?
+    pub struct Speed {
+        #[pyo3(get, set)]
+        pub speed: f32
+    }
+    #[cfg(feature = "python")]
+    #[pymethods]
+    impl Speed {
+        #[new]
+        fn new(obj: &PyRawObject, speed: f32) {
+            obj.init(Self { speed })
+        }
+    }
+    #[cfg(not(feature = "python"))]
+    #[derive(Clone, Debug, Component, Serialize, Deserialize)]
+    /// How much should we move your Heading?
+    pub struct Speed {
+        pub speed: f32
+    }
+
+    #[cfg(feature = "python")]
+    #[pyclass]
+    #[derive(Clone, Debug, Component, Serialize, Deserialize)]
+    /// Where would the Client like to go?
+    /// Note that the server isn't necessarily going to actually get them there.
+    pub struct Heading {
+        pub dir: na::Unit<Vec2>,
+    }
+    #[cfg(feature = "python")]
+    #[pymethods]
+    impl Heading {
+        #[new]
+        fn new(obj: &PyRawObject, speed: PyVec2) {
+            obj.init(Self { dir: na::Unit::new_normalize(speed.inner) })
+        }
+    }
+    #[cfg(not(feature = "python"))]
+    #[derive(Clone, Debug, Component, Serialize, Deserialize)]
+    pub struct Heading {
+        pub dir: na::Unit<Vec2>,
+    }
 }
+pub use moving::{Speed, Heading};

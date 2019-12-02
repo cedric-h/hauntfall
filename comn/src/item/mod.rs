@@ -1,9 +1,63 @@
 use crate::prelude::*;
+#[cfg(feature = "python")]
+use pyo3::{prelude::*, types::PyAny};
 use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
 use std::collections::HashMap;
+#[cfg(feature = "python")]
+use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter, EnumString};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Component, Serialize, Deserialize)]
+#[cfg(feature = "python")]
+#[pyclass(name=Item)]
+#[derive(Debug, Clone, Component)]
+pub struct PyItem {
+    #[pyo3(get, set)]
+    inner: Item,
+}
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyItem {
+    #[new]
+    fn new(obj: &PyRawObject, inner: Item) {
+        obj.init(Self { inner })
+    }
+}
+#[cfg(feature = "python")]
+impl<'source> FromPyObject<'source> for PyItem {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        unsafe {
+            let py = Python::assume_gil_acquired();
+            let obj: PyObject = ob.to_object(py);
+            Ok(Self {
+                inner: obj.getattr(py, "inner")?.extract(py)?,
+            })
+        }
+    }
+}
+#[cfg(feature = "python")]
+impl crate::PyWrapper<Item> for PyItem {
+    fn into_inner(self) -> Item {
+        self.inner
+    }
+}
+
+/// Convenience constant for easily grabbing the weapon.
+pub const WEAPON_SLOT: SlotIndex = SlotIndex::Reserved(Item::Weapon);
+
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    EnumIter,
+    Component,
+    Serialize,
+    Deserialize,
+)]
 /// Something that can be put inside of an inventory.
 pub enum Item {
     /// An Item of this variant should also have a Weapon component.
@@ -14,6 +68,33 @@ pub enum Item {
     /// other things can also fit in Slot::Reserved for their particular
     /// type of Item.
     Misc,
+}
+#[cfg(feature = "python")]
+impl<'source> FromPyObject<'source> for Item {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let s: &str = ob.extract()?;
+        Ok(Item::str(s).unwrap())
+    }
+}
+#[cfg(feature = "python")]
+impl IntoPy<PyObject> for Item {
+    fn into_py(self, py: Python) -> PyObject {
+        self.to_string().into_py(py)
+    }
+}
+impl Item {
+    #[cfg(feature = "python")]
+    #[inline]
+    pub fn str(s: &str) -> Result<Self, String> {
+        use std::str::FromStr;
+        Item::from_str(s).map_err(|_| {
+            format!(
+                "{} is not an Alignment! Alignment must be one of: {:?}",
+                s,
+                Item::iter().collect::<Vec<_>>(),
+            )
+        })
+    }
 }
 impl Default for Item {
     fn default() -> Self {

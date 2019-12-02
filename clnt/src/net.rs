@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use bimap::BiMap;
+use comn::{na::Translation2, vec_of_pos};
 use comn::{NetComponent, NetMessage, Pos};
 use std::sync::{Arc, Mutex};
 use stdweb::{
@@ -118,10 +119,8 @@ impl<'a> System<'a> for SyncPositions {
     // the server sent; that way things in the simulation will still move.
     fn run(&mut self, (mut currents, updates, headings): Self::SystemData) {
         for (
-            Pos(Iso2 {
-                translation: at, ..
-            }),
-            UpdatePosition {
+            vec_of_pos!(at),
+            &UpdatePosition {
                 iso: Iso2 {
                     translation: go, ..
                 },
@@ -131,12 +130,11 @@ impl<'a> System<'a> for SyncPositions {
         ) in (&mut currents, &updates, headings.maybe()).join()
         {
             if let Some(heading) = heading {
-                if !(heading.dir.magnitude() > 0.0) {
-                    at.vector = at.vector.lerp(&go.vector, 0.03);
+                if heading.dir.magnitude() > 0.0 {
+                    continue;
                 }
-            } else {
-                at.vector = at.vector.lerp(&go.vector, 0.03);
             }
+            *at = at.lerp(&go.vector, 0.03);
             /*
             current.rotation = na::UnitComplex::from_complex(
             current.rotation.complex()
@@ -230,7 +228,7 @@ impl<'a> System<'a> for HandleServerPackets {
                         info!("establishment");
 
                         // start loading the assets we'll need
-                        js!(load_assets(@{appearance_record.clone().0}));
+                        js!(load_assets(@{appearance_record.names.clone()}));
 
                         // store that in the ECS
                         lu.exec_mut(move |world| {

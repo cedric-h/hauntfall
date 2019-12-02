@@ -9,7 +9,7 @@ use stdweb::{
     traits::IKeyboardEvent,
     web::{
         document,
-        event::{ConcreteEvent, KeyPressEvent, KeyUpEvent},
+        event::{ConcreteEvent, KeyPressEvent, KeyUpEvent, MouseDownEvent},
         IEventTarget,
     },
 };
@@ -88,6 +88,40 @@ impl<'a> System<'a> for MovementControl {
 }
 
 /// The player pressed the key for picking up an item.
+pub struct LaunchAttacks {
+    mouse_events: Arc<Mutex<usize>>,
+}
+impl Default for LaunchAttacks {
+    fn default() -> Self {
+        let mouse_events = Arc::new(Mutex::new(0));
+
+        document().add_event_listener({
+            let mouse_events = mouse_events.clone();
+
+            move |_: MouseDownEvent| {
+                *mouse_events
+                    .lock()
+                    .expect("Can't lock mouse_events to insert event") += 1;
+            }
+        });
+
+        Self { mouse_events }
+    }
+}
+impl<'a> System<'a> for LaunchAttacks {
+    type SystemData = (Read<'a, ServerConnection>,);
+    fn run(&mut self, (sc,): Self::SystemData) {
+        if let Ok(mut mouse_events) = self.mouse_events.lock() {
+            for _ in 0..*mouse_events {
+                info!("sending attack req!");
+                sc.insert_comp(comn::combat::AttackRequest);
+            }
+            *mouse_events = 0;
+        }
+    }
+}
+
+/// The player pressed the key for picking up an item.
 pub struct PickupItems {
     pickup_presses: Arc<Mutex<usize>>,
 }
@@ -122,14 +156,12 @@ impl<'a> System<'a> for PickupItems {
 
     fn run(&mut self, (ents, sc, server_to_local_ids, player, items, poses): Self::SystemData) {
         use comn::item::{PickupRequest, MAX_INTERACTION_DISTANCE_SQUARED};
+        use comn::{na::Translation2, vec_of_pos};
 
         if let (Ok(mut pickup_presses), Some(player_entity)) =
             (self.pickup_presses.lock(), player.0)
         {
-            let Pos(Iso2 {
-                translation: player_translation,
-                ..
-            }) = match poses.get(player_entity) {
+            let vec_of_pos!(player_loc) = match poses.get(player_entity) {
                 Some(p) => p,
                 // we have a player, but it doesn't have a location yet?
                 // well that's fine, but tryna pick up anything just isn't gonna work.
@@ -146,34 +178,24 @@ impl<'a> System<'a> for PickupItems {
                 if let Some(&id) = (&*ents, &poses, &items)
                     .join()
                     // returns (the entity of that item, that item's distance from the player^2)
-                    .filter_map(
-                        |(
-                            item_entity,
-                            Pos(Iso2 {
-                                translation: item_translation,
-                                ..
-                            }),
-                            _,
-                        )| {
-                            // first see if the item is close enough to the mouse
-                            let item_to_player_distance_squared = (item_translation.vector
-                                - player_translation.vector)
-                                .magnitude_squared();
+                    .filter_map(|(item_entity, vec_of_pos!(item_loc), _)| {
+                        // first see if the item is close enough to the mouse
+                        let item_to_player_distance_squared =
+                            (item_loc - player_loc).magnitude_squared();
 
-                            if item_to_player_distance_squared < MAX_INTERACTION_DISTANCE_SQUARED {
-                                trace!("item close enough!");
-                                Some((item_entity, item_to_player_distance_squared))
-                            } else {
-                                trace!(
-                                    "click too far away: {}\nitem: {}\ndistance: {}",
-                                    player_translation.vector,
-                                    item_translation.vector,
-                                    item_to_player_distance_squared.sqrt()
-                                );
-                                None
-                            }
-                        },
-                    )
+                        if item_to_player_distance_squared < MAX_INTERACTION_DISTANCE_SQUARED {
+                            trace!("item close enough!");
+                            Some((item_entity, item_to_player_distance_squared))
+                        } else {
+                            trace!(
+                                "click too far away: {}\nitem: {}\ndistance: {}",
+                                player_loc,
+                                item_loc,
+                                item_to_player_distance_squared.sqrt()
+                            );
+                            None
+                        }
+                    })
                     // finds the item with the shortest distance from the click
                     .min_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(&dist_b).unwrap())
                     // we care about the item's id on the server, not its distance from the player.

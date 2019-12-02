@@ -2,11 +2,13 @@ use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
 use std::fmt::Debug;
 // scripting
-use pyo3::{prelude::*, PyRawObject, types::PyAny};
+#[cfg(feature = "python")]
+use pyo3::{prelude::*, types::PyAny, PyRawObject};
 
 pub mod player_anim;
 pub use player_anim::PlayerAnimationController;
 
+#[cfg(feature = "python")]
 #[pyclass]
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Serialize, Deserialize)]
 /// Something's index into the AppearanceRecord; which out of any of those possible
@@ -18,24 +20,33 @@ pub use player_anim::PlayerAnimationController;
 /// except for when it needs to be sent down to the clients.
 pub struct Appearance {
     #[pyo3(get, set)]
-    index: usize
+    pub index: usize,
 }
+#[cfg(feature = "python")]
 #[pymethods]
 impl Appearance {
     #[new]
     fn new(obj: &PyRawObject, index: u64) {
         obj.init(Appearance {
-            index: index as usize
+            index: index as usize,
         });
     }
 }
+#[cfg(feature = "python")]
 impl<'source> FromPyObject<'source> for Appearance {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         Ok(Appearance {
-            index: ob.extract::<u64>()? as usize
+            index: ob.extract::<u64>()? as usize,
         })
     }
 }
+
+#[cfg(not(feature = "python"))]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Serialize, Deserialize)]
+pub struct Appearance {
+    pub index: usize,
+}
+
 #[cfg(feature = "flagged_appearances")]
 impl Component for Appearance {
     type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
@@ -45,6 +56,8 @@ impl Component for Appearance {
     type Storage = DenseVecStorage<Self>;
 }
 
+// Python Implementation
+#[cfg(feature = "python")]
 #[pyclass]
 /// AppearanceRecord stores which Appearances are currently loaded into the game
 /// and ready to be used. Normally, they're inserted from the config::Server.
@@ -52,6 +65,7 @@ impl Component for Appearance {
 pub struct AppearanceRecord {
     pub names: Vec<String>,
 }
+#[cfg(feature = "python")]
 #[pymethods]
 impl AppearanceRecord {
     #[new]
@@ -62,15 +76,26 @@ impl AppearanceRecord {
     /// Creates an Appearance component with the given name.
     /// Panics if such an appearance can't be found.
     pub fn appearance_of(&self, appearance: &str) -> PyResult<Appearance> {
-        Ok(self.try_appearance_of(appearance)
+        Ok(self
+            .try_appearance_of(appearance)
             .unwrap_or_else(|e| panic!(e)))
     }
 }
+#[cfg(feature = "python")]
 impl ToPyObject for AppearanceRecord {
     fn to_object(&self, py: Python) -> PyObject {
         let d = pyo3::PyRef::new(py, self.clone()).unwrap();
         d.to_object(py)
     }
+}
+
+// Non Python Implementation
+#[cfg(not(feature = "python"))]
+/// AppearanceRecord stores which Appearances are currently loaded into the game
+/// and ready to be used. Normally, they're inserted from the config::Server.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceRecord {
+    pub names: Vec<String>,
 }
 impl AppearanceRecord {
     #[inline]
@@ -91,7 +116,6 @@ impl AppearanceRecord {
             })
     }
 }
-
 
 #[derive(Clone, Debug, Default, Component, Serialize, Deserialize)]
 /// Entities with this component are rendered at a special stage on the client,

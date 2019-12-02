@@ -19,7 +19,7 @@ impl<'a> System<'a> for SendNewPositions {
 
     fn run(&mut self, (cm, loggin_ins, clients, ents, isos): Self::SystemData) {
         for (Client(addr), _) in (&clients, !&loggin_ins).join() {
-            for (Pos(iso), ent) in (&isos, &*ents).join() {
+            for (Pos { iso }, ent) in (&isos, &*ents).join() {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 cm.insert_comp(
                     *addr,

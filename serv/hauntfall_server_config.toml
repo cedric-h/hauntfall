@@ -6,7 +6,9 @@ appearance_record.names = [
     "StoneOutcroppingFloorCorner",
     "StoneOutcroppingFloorBottom",
     "Skeleton",
+    "Player",
     "Lantern",
     "StoneWall",
+    "StoneDoor",
     "Hammer",
 ]

@@ -8,6 +8,7 @@ use std::{fs::File, io::Read};
 use super::ServerConfig;
 use crate::combat::Chaser;
 use comn::prelude::*;
+use comn::PyWrapper;
 // script
 use pyo3::prelude::*;
 use pyo3::PyTypeInfo;
@@ -39,8 +40,45 @@ impl<C: PyTypeInfo + Component + Debug + Clone + Send + Sync> ComponentFactory
         e: Entity,
     ) -> Result<(), ()> {
         if let Ok(c) = obj.cast_as::<C>(py) {
-            log::info!("{:?}", c);
+            log::trace!("{:?}", c);
             lu.insert(e, c.clone());
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+}
+/// For a struct like PyAlignment or PyItem that just wraps a real Component like
+/// Alignment or Item.
+struct PyWrapperComponentEntry<
+    W: PyTypeInfo + Clone + PyWrapper<C>,
+    C: Debug + Component + Send + Sync,
+> {
+    w: PhantomData<W>,
+    c: PhantomData<C>,
+}
+impl<W: PyTypeInfo + Clone + PyWrapper<C>, C: Debug + Component + Send + Sync>
+    PyWrapperComponentEntry<W, C>
+{
+    const INSTANCE: Self = Self {
+        w: PhantomData,
+        c: PhantomData,
+    };
+}
+impl<W: PyTypeInfo + Clone + PyWrapper<C>, C: Debug + Component + Send + Sync> ComponentFactory
+    for PyWrapperComponentEntry<W, C>
+{
+    fn try_py_insert<'p>(
+        &self,
+        py: Python<'p>,
+        obj: &PyObject,
+        lu: &LazyUpdate,
+        e: Entity,
+    ) -> Result<(), ()> {
+        if let Ok(w) = obj.cast_as::<W>(py) {
+            let c = w.clone().into_inner();
+            log::trace!("{:?}", c);
+            lu.insert(e, c);
             Ok(())
         } else {
             Err(())
@@ -56,6 +94,15 @@ impl ComponentFactoryRegistry {
 
     pub fn register<C: PyTypeInfo + Component + Debug + Clone + Send + Sync>(&mut self) {
         self.0.push(&ComponentEntry::<C>::INSTANCE);
+    }
+
+    pub fn register_py_wrapper<
+        W: 'static + PyTypeInfo + Clone + PyWrapper<C>,
+        C: Component + Debug + Send + Sync,
+    >(
+        &mut self,
+    ) {
+        self.0.push(&PyWrapperComponentEntry::<W, C>::INSTANCE);
     }
 
     pub fn try_py_insert<'p>(
@@ -79,6 +126,24 @@ pub struct Level {
     registry: ComponentFactoryRegistry,
 }
 
+const BASIC_COMPONENTS: &'static str = r#"
+def basic_components(entry):
+    components = []
+
+    components.append(Pos(Iso2(entry["location"], entry["z_rotation"])))
+
+    components.append(
+       appearance_record.appearance_of(
+           entry["appearance"]
+       )
+    )
+
+    if None != (hb := entry["hitbox_dimensions"]):
+        components.append(Hitbox(hb))
+
+    return components    
+"#;
+
 impl Level {
     pub fn from_name(level: String) -> Self {
         // open the script.py file for the level
@@ -101,11 +166,16 @@ impl Level {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let script = PyModule::from_code(py, &script_src, &format!("{}.py", &level), "level")
-            .unwrap_or_else(|e| {
-                e.print(py);
-                panic!("Couldn't load Python script for level {}", &level)
-            });
+        let script = PyModule::from_code(
+            py,
+            &(script_src + BASIC_COMPONENTS),
+            &format!("{}.py", &level),
+            "level",
+        )
+        .unwrap_or_else(|e| {
+            e.print(py);
+            panic!("Couldn't load Python script for level {}", &level)
+        });
         script
             .add("level_name", level.clone())
             .expect("Couldn't insert level name into module.");
@@ -126,14 +196,47 @@ impl Level {
             }
         }
 
-        use comn::art::{Appearance, AppearanceRecord};
+        macro_rules! register_component_wrappers {
+            ( $( $w:tt: $c:tt , )* ) => {
+                $(
+                    registry.register_py_wrapper::<$w, $c>();
+                    script.add_class::<$w>()
+                        .expect(concat!(
+                            "couldn't add class ",
+                            stringify!($w)
+                        ));
+                )*
+            }
+        }
 
+        use crate::combat::alignment::{Alignment, PyAlignment};
+        use comn::art::{Appearance, AppearanceRecord};
+        use comn::combat::{Health, Hurtbox};
+        use comn::controls::{Heading, Speed};
+        use comn::item::PyItem;
+        use comn::{Hitbox, PyIso2};
+
+        script.add_class::<PyIso2>().unwrap();
         script.add_class::<AppearanceRecord>().unwrap();
 
         #[rustfmt::skip]
         register_components!(
-            Chaser,
             Appearance,
+
+            Hitbox,
+            Hurtbox,
+            Health,
+
+            Chaser,
+            Speed,
+            Heading,
+            Pos,
+        );
+
+        #[rustfmt::skip]
+        register_component_wrappers!(
+            PyAlignment: Alignment,
+            PyItem: Item,
         );
 
         Self { level, registry }

@@ -63,7 +63,6 @@ impl<'a> System<'a> for SendWorldToNewPlayers {
     }
 }
 
-const PLAYER_APPEARANCE: &'static str = "Skeleton";
 pub struct SpawnNewPlayers;
 impl<'a> System<'a> for SpawnNewPlayers {
     type SystemData = (
@@ -80,29 +79,33 @@ impl<'a> System<'a> for SpawnNewPlayers {
         (ents, cm, appear_record, lu, mut players_to_spawn, clients): Self::SystemData,
     ) {
         use crate::combat;
-        use comn::{art, item, Cuboid, Hitbox};
+        use comn::{art, combat::Health, controls, item, Hitbox};
         for (_, ent, Client(new_player_addr)) in (players_to_spawn.drain(), &*ents, &clients).join()
         {
             trace!("spawning new player!");
             // these are the components the entity will have.
-            let appearance = appear_record.try_appearance_of(PLAYER_APPEARANCE).unwrap();
-            let iso = Pos(Iso2::translation(1.0, 1.0));
+            let appearance = appear_record.try_appearance_of("Player").unwrap();
+            let iso = Pos::vec(Vec2::new(1.0, 1.0));
+            let speed = controls::Speed { speed: 0.115 };
             //let animate = Animate::new();
-            let hitbox = Hitbox(Cuboid::new(Vec2::new(0.5, 0.25)));
+            let hitbox = Hitbox::vec(Vec2::new(0.5, 0.25));
 
             // give them player components
             lu.insert(ent, iso.clone());
+            lu.insert(ent, speed.clone());
             lu.insert(ent, appearance.clone());
             //lu.insert(ent, animate.clone());
             lu.insert(ent, hitbox.clone());
             lu.insert(ent, art::PlayerAnimationController);
             lu.insert(ent, combat::Alignment::Players);
+            lu.insert(ent, Health::full(5));
             lu.insert(ent, item::Inventory::character());
 
             // tell everyone 'bout the new kid on the block
             for Client(addr) in (&clients).join() {
                 cm.new_ent(*addr, ent);
                 cm.insert_comp(*addr, ent, iso.clone());
+                cm.insert_comp(*addr, ent, speed.clone());
                 cm.insert_comp(*addr, ent, appearance.clone());
                 //cm.insert_comp(*addr, ent, animate.clone());
                 cm.insert_comp(*addr, ent, hitbox.clone());

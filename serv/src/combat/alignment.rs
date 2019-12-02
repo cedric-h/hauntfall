@@ -1,9 +1,41 @@
 use comn::prelude::*;
-use comn::strum::{Display, EnumIter, EnumString};
-use pyo3::{prelude::*, types::PyAny};
 use serde::{Deserialize, Serialize};
 use specs::{prelude::*, Component};
+// scripting
+use pyo3::{prelude::*, types::PyAny};
+// string enum
 use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter, EnumString};
+
+#[pyclass(name=Alignment)]
+#[derive(Debug, Clone, Component)]
+pub struct PyAlignment {
+    #[pyo3(get, set)]
+    pub inner: Alignment,
+}
+#[pymethods]
+impl PyAlignment {
+    #[new]
+    fn new(obj: &PyRawObject, inner: Alignment) {
+        obj.init(Self { inner })
+    }
+}
+impl<'source> FromPyObject<'source> for PyAlignment {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        unsafe {
+            let py = Python::assume_gil_acquired();
+            let obj: PyObject = ob.to_object(py);
+            Ok(Self {
+                inner: obj.getattr(py, "inner")?.extract(py)?,
+            })
+        }
+    }
+}
+impl comn::PyWrapper<Alignment> for PyAlignment {
+    fn into_inner(self) -> Alignment {
+        self.inner
+    }
+}
 
 #[derive(Debug, Clone, Copy, Display, EnumString, EnumIter, Serialize, Deserialize, Component)]
 /// The alignment of a particular Entity;
@@ -24,6 +56,11 @@ impl<'source> FromPyObject<'source> for Alignment {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         let s: &str = ob.extract()?;
         Ok(Alignment::str(s).unwrap())
+    }
+}
+impl IntoPy<PyObject> for Alignment {
+    fn into_py(self, py: Python) -> PyObject {
+        self.to_string().into_py(py)
     }
 }
 impl Alignment {

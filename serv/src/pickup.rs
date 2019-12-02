@@ -1,7 +1,9 @@
 use crate::net::prelude::*;
 use comn::{
     item::{DropRequest, Inventory, PickupRequest, MAX_INTERACTION_DISTANCE_SQUARED},
+    na::Translation2,
     prelude::*,
+    vec_of_pos,
 };
 use log::*;
 use specs::prelude::*;
@@ -88,10 +90,7 @@ impl<'a> System<'a> for ItemPickupDrop {
                     player_ent,
                     player_inventory,
                     PickupRequest { id },
-                    &Pos(Iso2 {
-                        translation: p_trans,
-                        ..
-                    }),
+                    &vec_of_pos!(p_loc),
                     &Client(player_addr),
                 )| {
                     info!("got request");
@@ -99,15 +98,12 @@ impl<'a> System<'a> for ItemPickupDrop {
                     // get the pos of the item they want to pickup
                     // the question marks will prevent them from picking this up
                     // if the item in question doesn't have a position or item.
-                    let &Pos(Iso2 {
-                        translation: i_trans,
-                        ..
-                    }) = poses.get(item_ent)?;
+                    let &vec_of_pos!(i_loc) = poses.get(item_ent)?;
                     let item_item = items.get(item_ent)?;
                     info!("passed requirements");
 
                     let player_to_item_distance_squared =
-                        (p_trans.vector - i_trans.vector).magnitude_squared();
+                        (p_loc - i_loc).magnitude_squared();
 
                     // actually close enough!
                     if player_to_item_distance_squared < MAX_INTERACTION_DISTANCE_SQUARED {

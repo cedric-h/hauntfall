@@ -34,6 +34,7 @@ fn main() {
         // controls
         .with(comn::controls::MoveHeadings,         "heading",      &[])
         .with(controls::MovementControl::default(), "move",         &[])
+        .with(controls::LaunchAttacks::default(),   "attack",       &[])
         .with(controls::PickupItems::default(),     "click",        &[])
         // phys
         .with(comn::phys::Collision,                "collision",    &[])
